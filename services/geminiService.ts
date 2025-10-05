@@ -1,17 +1,22 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { InventoryItem, Sale, SalesPrediction, InventoryInsight } from "../types";
-import { GEMINI_API_KEY } from "../config";
+// FIX: Removed GEMINI_API_KEY import to adhere to @google/genai guidelines.
+// The API key will be sourced from process.env.API_KEY directly.
 
 /**
  * NOTE: This service calls the Google Gemini API directly from the client.
- * The API key is configured in the `config.ts` file.
+ * The API key is provided via the process.env.API_KEY environment variable.
  */
 const generateContent = async (prompt: string, schema: any) => {
-    if (!GEMINI_API_KEY) {
-        throw new Error("API_KEY_ERROR: The Gemini API key is missing. Please configure it in `config.ts` to use AI features.");
+    // FIX: Per @google/genai guidelines, the API key must come exclusively from process.env.API_KEY.
+    if (!process.env.API_KEY) {
+        // FIX: Updated error message to be more generic and not expose implementation details.
+        throw new Error("API_KEY_ERROR: The Gemini API key is missing. Please check your environment configuration.");
     }
 
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    // FIX: Per @google/genai guidelines, initialize with an object { apiKey: ... }
+    // and use process.env.API_KEY.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',

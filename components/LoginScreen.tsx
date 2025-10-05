@@ -12,6 +12,13 @@ const LoginScreen: React.FC = () => {
         
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
+            options: {
+                // By specifying the redirectTo option, we ensure that after a successful
+                // Google sign-in, the user is returned to the root of our application.
+                // This is crucial for a smooth user experience, especially on mobile
+                // where the user is taken out of the app to the browser for auth.
+                redirectTo: window.location.origin,
+            },
         });
 
         if (error) {
