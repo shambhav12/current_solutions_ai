@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">current-solutions-ai</string>
+    <string name="title_activity_main">current-solutions-ai</string>
+    <string name="package_name">com.shambhav.currentsolutions</string>
+    <string name="custom_url_scheme">com.shambhav.currentsolutions</string>
+</resources>

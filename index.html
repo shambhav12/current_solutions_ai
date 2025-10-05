@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Current Solutions AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'background': '#111827', // slate-900
+              'surface': '#1f2937',    // slate-800
+              'surface-hover': '#374151', // slate-700
+              'border': '#374151',    // slate-700
+              'primary': '#6366f1',    // indigo-500
+              'primary-focus': '#4f46e5', // indigo-600
+              'text-main': '#e5e7eb',   // gray-200
+              'text-muted': '#9ca3af',  // gray-400
+              'success': '#10b981',    // emerald-500
+              'danger': '#ef4444',     // red-500
+              'warning': '#f59e0b',    // amber-500
+              'info': '#3b82f6',       // blue-500
+            }
+          }
+        }
+      }
+    </script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script type="importmap">
+{
+  "imports": {
+    "recharts": "https://aistudiocdn.com/recharts@^3.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
+    "@google/genai": "https://esm.run/@google/genai"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-background text-text-main">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
