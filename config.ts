@@ -6,7 +6,9 @@
 // VITE_SUPABASE_ANON_KEY="YOUR_SUPABASE_ANON_KEY"
 
 // FIX: Switched from using `import.meta.env` to importing from `env.ts` to resolve TypeScript errors and centralize configuration.
-import { SUPABASE_URL as SU_URL, SUPABASE_ANON_KEY as SU_KEY } from './env';
+import { SUPABASE_URL as SU_URL, SUPABASE_ANON_KEY as SU_KEY,GEMINI_API_KEY as GEM_KEY } from './env';
 
 export const SUPABASE_URL = SU_URL;
 export const SUPABASE_ANON_KEY = SU_KEY;
+export const GEMINI_API_KEY = GEM_KEY;
+
