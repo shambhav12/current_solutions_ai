@@ -10,11 +10,17 @@ import { GEMINI_API_KEY } from './env';
 // This polyfill reads the GEMINI_API_KEY from env.ts and makes it available to the SDK.
 const geminiApiKey = GEMINI_API_KEY;
 if (geminiApiKey) {
-  (window as any).process = {
-    env: {
-      API_KEY: geminiApiKey,
-    },
-  };
+  // More robust polyfill for process.env.
+  // This ensures we don't overwrite the entire `process` or `process.env`
+  // objects if they already exist, which can be the case in some environments
+  // or with other libraries.
+  if (typeof (window as any).process === 'undefined') {
+    (window as any).process = {};
+  }
+  if (typeof (window as any).process.env === 'undefined') {
+    (window as any).process.env = {};
+  }
+  (window as any).process.env.API_KEY = geminiApiKey;
 }
 
 const rootElement = document.getElementById('root');

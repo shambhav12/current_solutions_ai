@@ -17,7 +17,8 @@ const LoginScreen: React.FC = () => {
                 // Google sign-in, the user is returned to the root of our application.
                 // This is crucial for a smooth user experience, especially on mobile
                 // where the user is taken out of the app to the browser for auth.
-                redirectTo: window.location.origin,
+                // Use window.location.href to be more specific than window.location.origin.
+                redirectTo: window.location.href,
             },
         });
 
