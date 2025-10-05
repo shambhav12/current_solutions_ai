@@ -34,10 +34,8 @@ const Insights: React.FC = () => {
         let message = err instanceof Error ? err.message : "An unknown error occurred.";
         
         // Intercept common API errors to provide helpful feedback.
-        // FIX: Updated the error message to be more generic and not expose internal configuration details,
-        // as per the @google/genai API key handling guidelines.
         if (message.includes("API_KEY_ERROR") || message.includes("API key not valid")) {
-            message = "The AI service is currently unavailable due to a configuration issue.";
+            message = "The AI service is currently unavailable due to a configuration issue. Please ensure your Gemini API key is correctly set in the env.ts file.";
         } else if (message.includes("Authentication failed")) {
             signOut();
         }

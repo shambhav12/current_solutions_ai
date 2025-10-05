@@ -4,25 +4,28 @@ An intelligent dashboard for a small electric retail shop to track sales, manage
 
 ## Project Setup Guide
 
-This project uses [Vite](https://vitejs.dev/) for its development environment, which handles API keys and secrets through environment variables.
+This project requires you to place your secret API keys in a single configuration file.
 
-### Part 1: Environment Variable Setup
+### Part 1: API Key Setup
 
-All secret keys for the application are managed in a local environment file that you must create.
-
-1.  **Create a `.env.local` file:**
-    *   In the root directory of your project, create a new file named `.env.local`. This file is listed in `.gitignore` and will not be committed to your repository, keeping your keys safe.
+1.  **Locate the `env.ts` file:**
+    *   In the root directory of your project, find and open the file named `env.ts`.
 
 2.  **Add Your Credentials:**
-    *   Open the new `.env.local` file and paste the following content into it. You will acquire the actual values for these keys in the following steps.
+    *   This file contains placeholders for your Supabase and Gemini API keys. You will need to replace the placeholder values with your actual keys, which you will acquire in the following steps.
 
-    ```env
-    VITE_SUPABASE_URL="YOUR_SUPABASE_URL_HERE"
-    VITE_SUPABASE_ANON_KEY="YOUR_SUPABASE_ANON_KEY_HERE"
-    VITE_GEMINI_API_KEY="YOUR_GEMINI_API_KEY_HERE"
+    ```typescript
+    // env.ts
+
+    // ...
+    export const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';
+    export const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
+
+    // ...
+    export const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY_HERE';
     ```
 
-    **Important:** In Vite, only variables prefixed with `VITE_` are exposed to the client-side code. Do not change these variable names.
+    **Important:** This file is included in your project's code. For better security in a production application, it's recommended to use environment variables. However, for simplicity in this setup, we will edit this file directly.
 
 ### Part 2: Supabase Project Setup
 
@@ -30,17 +33,17 @@ All secret keys for the application are managed in a local environment file that
     *   Go to [supabase.com](https://supabase.com/) and create a new project.
     *   Navigate to your project settings (Gear icon > API).
     *   Find your **Project URL** and **anon public key**.
-    *   Open your `.env.local` file and paste these values for `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` respectively.
+    *   Open your `env.ts` file and paste these values into the `SUPABASE_URL` and `SUPABASE_ANON_KEY` variables.
 
 2.  **Run the Database Schema Script:**
     *   In your Supabase project dashboard, navigate to the **SQL Editor**.
     *   Click **+ New query**.
-    *   Find the `supabase/schema.sql` file in this project repository (if it exists) or create the necessary tables (`inventory`, `sales`).
-    *   This will create the required tables and security policies.
+    *   Create the `inventory` and `sales` tables. You can use the `supabase/schema.sql` file in this repository as a reference for the table structure.
+    *   Run the script to create the required tables and security policies.
 
 ### Part 3: Google Authentication Setup
 
-This is the most critical part for making login work. It connects your app, Google, and Supabase.
+This section connects your app, Google, and Supabase to enable sign-in.
 
 1.  **Go to Google Cloud Console:**
     *   Navigate to the [Credentials page](https://console.cloud.google.com/apis/credentials). Ensure you have a project selected.
@@ -50,16 +53,15 @@ This is the most critical part for making login work. It connects your app, Goog
     *   **Application type**: Select **Web application**.
     *   **Name**: Give it a descriptive name (e.g., "Current Solutions App").
 
-3.  **Configure Authorized Redirect URI:**
+3.  **Configure Authorized Redirect URI (For Supabase):**
     *   Under **Authorized redirect URIs**, click **+ ADD URI**.
-    *   Enter your Supabase project's callback URL. Replace `<YOUR_PROJECT_ID>` with your actual Supabase project ID (found in your Supabase project settings):
+    *   Enter your Supabase project's callback URL. Replace `<YOUR_PROJECT_ID>` with your actual Supabase project ID (found in your Supabase project URL):
         ```
         https://<YOUR_PROJECT_ID>.supabase.co/auth/v1/callback
         ```
 
 4.  **Save and Get Credentials:**
-    *   Click **CREATE**. A modal will appear with your **Client ID** and **Client Secret**.
-    *   **Important:** Copy both the **Client ID** and the **Client Secret**.
+    *   Click **CREATE**. A modal will appear with your **Client ID** and **Client Secret**. Copy both.
 
 5.  **Configure Google Provider in Supabase:**
     *   Go to your Supabase Dashboard -> **Authentication** -> **Providers**.
@@ -73,47 +75,48 @@ This is the most critical part for making login work. It connects your app, Goog
 1.  **Get your API Key:**
     *   Visit the [Google AI Studio](https://aistudio.google.com/app/apikey) to generate an API key.
 
-2.  **Add Key to Environment File:**
-    *   Open your `.env.local` file.
-    *   Paste your new key as the value for `VITE_GEMINI_API_KEY`.
+2.  **Add Key to `env.ts`:**
+    *   Open your `env.ts` file and paste your new key as the value for the `GEMINI_API_KEY` variable.
 
-After completing these steps, you must **restart your development server** for the changes in `.env.local` to take effect.
+After completing these steps, you must **restart your development server** for the changes in `env.ts` to take effect.
 
 ---
 
-## Deployment (Permanent Solution)
-
-To get a public URL that works anywhere, you can deploy your application to a hosting service like Vercel or Netlify.
+## Deployment to Vercel
 
 ### Step 1: Push to GitHub
 
-*   Create a repository on [GitHub](https://github.com) and push your project code to it. Ensure your `.env.local` file is listed in `.gitignore` so your keys are not exposed.
+*   Create a repository on [GitHub](https://github.com) and push your project code to it.
 
 ### Step 2: Deploy with Vercel
 
 1.  **Sign up:** Go to [vercel.com](https://vercel.com) and sign up with your GitHub account.
-2.  **Import Project:** From your Vercel dashboard, click "Add New..." -> "Project", and import your project's GitHub repository.
-3.  **Configure Environment Variables:** Before deploying, go to the project's **Settings** tab and find **Environment Variables**. You must add the same variables from your `.env.local` file here.
-    *   `VITE_SUPABASE_URL`
-    *   `VITE_SUPABASE_ANON_KEY`
-    *   `VITE_GEMINI_API_KEY`
-4.  **Deploy:** Go back to the deployments tab and trigger a new deployment. Vercel will build and deploy your site using the environment variables you just set.
+2.  **Import Project:** From your Vercel dashboard, import your project's GitHub repository.
+3.  **Important:** Vercel will automatically build and deploy your site. Since your API keys are in the `env.ts` file, you do **not** need to configure environment variables on Vercel for this specific project structure.
+4.  Wait for the deployment to finish. Vercel will give you a public URL (e.g., `https://your-project-name.vercel.app`).
 
-### Step 3: Post-Deployment Configuration (CRUCIAL)
+### Step 3: Post-Deployment Configuration (CRUCIAL LOGIN FIX)
 
-Google Sign-In will **not** work on your new public URL until you complete these final steps.
+Google Sign-In will **fail** on your new live Vercel URL until you whitelist it in both Supabase and Google Cloud. This is the most common reason for login problems.
 
-1.  **Update Google Cloud Authorized Origins:**
-    *   Go back to your [Google Cloud Credentials page](https://console.cloud.google.com/apis/credentials).
-    *   Edit the OAuth Client ID you created earlier.
-    *   Under **Authorized JavaScript origins**, click **+ ADD URI**.
-    *   Enter your new public Vercel URL (e.g., `https://your-project-name.vercel.app`).
-    *   **Also add `http://localhost:3000`** to this list if you want to continue testing on your local machine.
-    *   Click **Save**.
-
-2.  **Update Supabase Site URL:**
+1.  **Update Supabase URL Configuration:**
     *   Go to your Supabase dashboard -> **Authentication** -> **URL Configuration**.
-    *   In the **Site URL** field, replace the default `localhost` URL with your new public Vercel URL.
+    *   In the **Site URL** field, enter your new public Vercel URL (e.g., `https://your-project-name.vercel.app`).
+    *   Under **Redirect URLs**, you must add **ALL** the URLs where you will use your app. Add each URL on a new line. **This is critical for both your live site and local testing to work.**
+        ```
+        https://your-project-name.vercel.app
+        http://localhost:5173
+        ```
+        *(If you use other local ports, like 3000, add them here too)*.
     *   Click **Save**.
 
-Your application is now fully configured and deployed. The public URL will work for you and any other users you share it with.
+2.  **Update Google Cloud Authorized Origins:**
+    *   Go back to your [Google Cloud Credentials page](https://console.cloud.google.com/apis/credentials).
+    *   Find and **Edit** the OAuth Client ID you created earlier.
+    *   Under **Authorized JavaScript origins**, click **+ ADD URI**.
+    *   You must add **ALL** the same base URLs here.
+        *   Add your Vercel URL (e.g., `https://your-project-name.vercel.app`).
+        *   Add your local development URL (e.g., `http://localhost:5173`).
+    *   Click **Save**.
+
+Your application is now fully configured and deployed. The login process should now work correctly on both your live Vercel URL and your local machine.

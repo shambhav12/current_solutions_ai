@@ -17,8 +17,9 @@ const LoginScreen: React.FC = () => {
                 // Google sign-in, the user is returned to the root of our application.
                 // This is crucial for a smooth user experience, especially on mobile
                 // where the user is taken out of the app to the browser for auth.
-                // Use window.location.href to be more specific than window.location.origin.
-                redirectTo: window.location.href,
+                // `window.location.origin` provides the base URL (e.g., http://localhost:5173 or https://your-site.com)
+                // which must be added to the allow-list in your Supabase dashboard.
+                redirectTo: window.location.origin,
             },
         });
 
