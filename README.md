@@ -99,6 +99,8 @@ After completing these steps, you must **restart your development server** for t
 
 Google Sign-In will **fail** on your new live Vercel URL until you whitelist it in both Supabase and Google Cloud. This is the most common reason for login problems.
 
+> **Note on Mobile App Behavior:** This project is a web application. When you access it from a mobile phone, you are using the web browser. The term "redirecting back to the app" means the browser should return to your Vercel site after login. The following steps are essential to make this work correctly on both desktop and mobile browsers.
+
 1.  **Update Supabase URL Configuration:**
     *   Go to your Supabase dashboard -> **Authentication** -> **URL Configuration**.
     *   In the **Site URL** field, enter your new public Vercel URL (e.g., `https://your-project-name.vercel.app`).

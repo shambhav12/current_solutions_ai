@@ -4,7 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { useFilters } from '../FilterContext';
 import DateFilterComponent from './ui/DateFilter';
 import { Sale } from '../types';
-import { RevenueIcon, ProfitIcon, OnlineIcon, OfflineIcon, GstIcon, InventoryValueIcon } from './Icons';
+import { RevenueIcon, ProfitIcon, OnlineIcon, OfflineIcon, GstIcon, InventoryValueIcon, GstPayableIcon } from './Icons';
 
 // Helper function to filter sales
 const filterSalesByDate = (sales: Sale[], dateFilter: ReturnType<typeof useFilters>['dateFilter']) => {
@@ -97,6 +97,35 @@ const Dashboard: React.FC = () => {
         [filteredSales]
     );
 
+    const outputGst = useMemo(() =>
+        filteredSales.reduce((acc, sale) => {
+            if (sale.has_gst) {
+                // Correctly assuming totalPrice is the pre-tax value.
+                // GST Amount = Total Price * 0.18
+                const gstAmount = sale.totalPrice * 0.18;
+                return acc + gstAmount;
+            }
+            return acc;
+        }, 0),
+        [filteredSales]
+    );
+
+    const inputGstOnSoldItems = useMemo(() =>
+        filteredSales.reduce((acc, sale) => {
+            if (sale.has_gst) {
+                // Assumes item.cost in inventory is pre-tax
+                const itemCost = inventoryCostMap.get(sale.inventoryItemId) || 0;
+                const inputGstForItem = (itemCost * sale.quantity) * 0.18;
+                return acc + inputGstForItem;
+            }
+            return acc;
+        }, 0),
+        [filteredSales, inventoryCostMap]
+    );
+
+    const netGstPayable = useMemo(() => outputGst - inputGstOnSoldItems, [outputGst, inputGstOnSoldItems]);
+
+
     const totalInventoryValue = useMemo(() =>
         inventory.reduce((acc, item) => acc + item.stock * item.price, 0),
         [inventory]
@@ -134,13 +163,16 @@ const Dashboard: React.FC = () => {
                 <h2 className="text-3xl font-bold text-text-main">Dashboard</h2>
                 <DateFilterComponent />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 <StatCard title="Total Revenue" value={`₹${totalRevenue.toFixed(2)}`} subtext={dateFilter.label} icon={<RevenueIcon />} />
                 <StatCard title="Total Profit" value={`₹${totalProfit.toFixed(2)}`} subtext={dateFilter.label} icon={<ProfitIcon />} />
                 <StatCard title="Online Revenue" value={`₹${onlineRevenue.toFixed(2)}`} subtext="Online payments" icon={<OnlineIcon />}/>
                 <StatCard title="Offline Revenue" value={`₹${offlineRevenue.toFixed(2)}`} subtext="Cash payments" icon={<OfflineIcon />}/>
-                <StatCard title="Total GST Sales" value={`₹${totalGstSales.toFixed(2)}`} subtext="From GST items" icon={<GstIcon />} />
                 <StatCard title="Inventory Value" value={`₹${totalInventoryValue.toFixed(2)}`} subtext="Current stock value" icon={<InventoryValueIcon />} />
+                <StatCard title="Total GST Sales" value={`₹${totalGstSales.toFixed(2)}`} subtext="Revenue from GST items" icon={<GstIcon />} />
+                <StatCard title="Output GST (Collected)" value={`₹${outputGst.toFixed(2)}`} subtext="From sales @ 18%" icon={<GstIcon />} />
+                <StatCard title="Input GST (Credit)" value={`₹${inputGstOnSoldItems.toFixed(2)}`} subtext="On cost of goods sold" icon={<GstIcon />} />
+                <StatCard title="Net GST Payable" value={`₹${netGstPayable.toFixed(2)}`} subtext="Output - Input GST" icon={<GstPayableIcon />} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

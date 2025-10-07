@@ -13,12 +13,13 @@ const LoginScreen: React.FC = () => {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                // By specifying the redirectTo option, we ensure that after a successful
-                // Google sign-in, the user is returned to the root of our application.
-                // This is crucial for a smooth user experience, especially on mobile
-                // where the user is taken out of the app to the browser for auth.
-                // `window.location.origin` provides the base URL (e.g., http://localhost:5173 or https://your-site.com)
-                // which must be added to the allow-list in your Supabase dashboard.
+                // This line is critical for login to work correctly.
+                // It tells Google to redirect the user back to the URL where they started the login process.
+                // For this to work, you MUST add this URL to the allow-list in your Supabase and Google Cloud settings.
+                // Refer to the 'Post-Deployment Configuration' section in the README.md for detailed instructions.
+                // Example URLs to add:
+                // - For local testing: http://localhost:5173
+                // - For your live site: https://your-project-name.vercel.app
                 redirectTo: window.location.origin,
             },
         });

@@ -88,17 +88,26 @@ export const useShopData = () => {
 
   const addSale = useCallback(
     async (sale: Omit<Sale, 'id' | 'date' | 'user_id'>) => {
-      if (!user || !inventory) {
-        console.error('[addSale] Aborted: user or inventory not available.');
+      if (!user) {
+        console.error('[addSale] Aborted: user not available.');
         return;
       }
 
-      let currentItemBeforeSale: InventoryItem | undefined;
-
       try {
-        currentItemBeforeSale = inventory.find((i) => i.id === sale.inventoryItemId);
-        if (!currentItemBeforeSale || currentItemBeforeSale.stock < sale.quantity) {
-          throw new Error('Not enough stock or item not found.');
+        // Fetch the latest item state directly from the database to avoid stale closure issues,
+        // especially when adding a sale for a newly created inventory item.
+        const { data: currentItemBeforeSale, error: itemFetchError } = await supabase
+          .from('inventory')
+          .select('*')
+          .eq('id', sale.inventoryItemId)
+          .single();
+
+        if (itemFetchError || !currentItemBeforeSale) {
+          throw new Error(itemFetchError?.message || `Inventory item with ID ${sale.inventoryItemId} not found.`);
+        }
+
+        if (currentItemBeforeSale.stock < sale.quantity) {
+          throw new Error(`Not enough stock for ${sale.productName}. Available: ${currentItemBeforeSale.stock}, Needed: ${sale.quantity}`);
         }
 
         const newStock = currentItemBeforeSale.stock - sale.quantity;
@@ -131,26 +140,26 @@ export const useShopData = () => {
           .single();
 
         if (saleError) {
-            // If sale insertion fails, try to revert the stock change.
-            await supabase
-              .from('inventory')
-              .update({ stock: currentItemBeforeSale.stock })
-              .eq('id', sale.inventoryItemId);
-            throw saleError; // Throw original error after attempting revert.
+          // If sale insertion fails, try to revert the stock change.
+          await supabase
+            .from('inventory')
+            .update({ stock: currentItemBeforeSale.stock })
+            .eq('id', sale.inventoryItemId);
+          throw saleError; // Throw original error after attempting revert.
         }
         if (!newSaleFromDb) throw new Error('Sale was not returned from database after insert.');
 
         // Step 4: Update the local state, mapping back to camelCase.
         const newSaleForState: Sale = {
-            id: newSaleFromDb.id,
-            user_id: newSaleFromDb.user_id,
-            inventoryItemId: newSaleFromDb.inventoryItemId,
-            productName: newSaleFromDb.productName,
-            quantity: newSaleFromDb.quantity,
-            totalPrice: newSaleFromDb.totalPrice,
-            date: newSaleFromDb.date,
-            paymentMethod: newSaleFromDb.payment_method,
-            has_gst: currentItemBeforeSale.has_gst,
+          id: newSaleFromDb.id,
+          user_id: newSaleFromDb.user_id,
+          inventoryItemId: newSaleFromDb.inventoryItemId,
+          productName: newSaleFromDb.productName,
+          quantity: newSaleFromDb.quantity,
+          totalPrice: newSaleFromDb.totalPrice,
+          date: newSaleFromDb.date,
+          paymentMethod: newSaleFromDb.payment_method,
+          has_gst: currentItemBeforeSale.has_gst,
         };
         
         setSales((prev) => (prev ? [...prev, newSaleForState] : [newSaleForState]));
@@ -163,7 +172,7 @@ export const useShopData = () => {
         alert(`Failed to add sale: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     },
-    [user, inventory]
+    [user]
   );
 
   const updateSale = useCallback(
@@ -272,8 +281,8 @@ export const useShopData = () => {
   );
 
   const addInventoryItem = useCallback(
-    async (item: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
-      if (!user) return;
+    async (item: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<InventoryItem | null> => {
+      if (!user) return null;
       const newItemPayload = { ...item, user_id: user.id };
       const { data: newItem, error } = await supabase
         .from('inventory')
@@ -282,8 +291,10 @@ export const useShopData = () => {
         .single();
       if (error || !newItem) {
         console.error('Error adding inventory item:', error);
+        return null;
       } else {
         setInventory((prev) => (prev ? [...prev, newItem] : [newItem]));
+        return newItem;
       }
     },
     [user]

@@ -14,13 +14,48 @@ interface SalesFormProps {
 }
 
 const SalesForm: React.FC<SalesFormProps> = ({ onClose, saleToEdit }) => {
-    const { inventory, addSale, updateSale } = useContext(ShopContext);
+    const { inventory, sales, addSale, updateSale, addInventoryItem } = useContext(ShopContext);
     const [itemId, setItemId] = useState('');
     const [quantity, setQuantity] = useState<string>('1');
     const [totalPrice, setTotalPrice] = useState<string>('0');
     const [paymentMethod, setPaymentMethod] = useState<'Online' | 'Offline'>('Offline');
     
+    // State for the new searchable product input
+    const [productSearch, setProductSearch] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const searchRef = useRef<HTMLDivElement>(null);
+
+    // State for creating a new item on-the-fly
+    const [isCreatingNewItem, setIsCreatingNewItem] = useState(false);
+    const [newItemPrice, setNewItemPrice] = useState('0');
+    const [newItemCost, setNewItemCost] = useState('0');
+    const [newItemHasGst, setNewItemHasGst] = useState(false);
+
     const item = useMemo(() => inventory?.find(i => i.id === itemId), [inventory, itemId]);
+
+    // Sort inventory by most sold items first
+    const sortedInventory = useMemo(() => {
+        if (!inventory || !sales) return [];
+
+        const salesCount = sales.reduce((acc, sale) => {
+            acc[sale.inventoryItemId] = (acc[sale.inventoryItemId] || 0) + sale.quantity;
+            return acc;
+        }, {} as Record<string, number>);
+
+        return [...inventory].sort((a, b) => {
+            const countA = salesCount[a.id] || 0;
+            const countB = salesCount[b.id] || 0;
+            return countB - countA;
+        });
+    }, [inventory, sales]);
+
+    const filteredInventory = useMemo(() => {
+        if (!productSearch) return sortedInventory;
+        return sortedInventory.filter(item =>
+            item.name.toLowerCase().includes(productSearch.toLowerCase())
+        );
+    }, [productSearch, sortedInventory]);
+
 
     useEffect(() => {
         if (saleToEdit) {
@@ -28,29 +63,55 @@ const SalesForm: React.FC<SalesFormProps> = ({ onClose, saleToEdit }) => {
             setQuantity(String(saleToEdit.quantity));
             setPaymentMethod(saleToEdit.paymentMethod || 'Offline');
             setTotalPrice(String(saleToEdit.totalPrice));
+            const itemName = inventory?.find(i => i.id === saleToEdit.inventoryItemId)?.name || '';
+            setProductSearch(itemName);
+            setIsCreatingNewItem(false);
         } else {
+            // Reset form for a new sale
             setItemId('');
             setQuantity('1');
             setPaymentMethod('Offline');
             setTotalPrice('0');
+            setProductSearch('');
+            setIsCreatingNewItem(false);
+            setNewItemPrice('0');
+            setNewItemCost('0');
+            setNewItemHasGst(false);
         }
-    }, [saleToEdit]);
+    }, [saleToEdit, inventory]);
 
     useEffect(() => {
-        if (item && quantity) {
-            setTotalPrice(String(item.price * Number(quantity)));
-        } else if (item && quantity === '') {
+        const numQuantity = Number(quantity);
+        if (isCreatingNewItem) {
+             setTotalPrice(String(Number(newItemPrice) * numQuantity));
+        } else if (item && numQuantity > 0) {
+            setTotalPrice(String(item.price * numQuantity));
+        } else {
              setTotalPrice('0');
         }
-    }, [item, quantity]);
+    }, [item, quantity, isCreatingNewItem, newItemPrice]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // Close dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!inventory) return;
 
         const numQuantity = Number(quantity);
         const numTotalPrice = Number(totalPrice);
-
+        let currentItemStock = item?.stock ?? 0;
+        let finalItemId = itemId;
+        let finalProductName = productSearch;
+        
+        // --- Form Validation ---
         if (!Number.isInteger(numQuantity) || numQuantity <= 0) {
             alert('Invalid value. Quantity must be a whole number greater than 0.');
             return;
@@ -59,22 +120,58 @@ const SalesForm: React.FC<SalesFormProps> = ({ onClose, saleToEdit }) => {
             alert('Invalid value. Total price cannot be negative.');
             return;
         }
+
+        if (isCreatingNewItem) {
+            const numNewPrice = Number(newItemPrice);
+            const numNewCost = Number(newItemCost);
+
+            if (isNaN(numNewPrice) || numNewPrice < 0) {
+                alert('Invalid value for new item. Price cannot be negative.');
+                return;
+            }
+            if (isNaN(numNewCost) || numNewCost < 0) {
+                alert('Invalid value for new item. Cost cannot be negative.');
+                return;
+            }
+
+            // Create the new item with initial stock equal to the quantity being sold.
+            // The addSale function will then deduct this, leaving the final stock at 0.
+            const newItemData = {
+                name: productSearch.trim(),
+                price: numNewPrice,
+                cost: numNewCost,
+                has_gst: newItemHasGst,
+                stock: numQuantity, 
+            };
+            const newInventoryItem = await addInventoryItem(newItemData);
+
+            if (!newInventoryItem) {
+                alert('Failed to create new inventory item. Please try again.');
+                return;
+            }
+            finalItemId = newInventoryItem.id;
+            currentItemStock = newInventoryItem.stock;
+        }
         
-        const currentItemStock = item ? item.stock : 0;
-        const stockAvailableForEdit = saleToEdit && saleToEdit.inventoryItemId === itemId 
+        if (!finalItemId) {
+            alert('Please select a valid product from the list or create a new one.');
+            return;
+        }
+
+        const stockAvailableForEdit = saleToEdit && saleToEdit.inventoryItemId === finalItemId 
             ? currentItemStock + saleToEdit.quantity 
             : currentItemStock;
 
-        if (!item || numQuantity > stockAvailableForEdit) {
-            alert(`Invalid quantity. Only ${stockAvailableForEdit} available in stock.`);
+        if (numQuantity > stockAvailableForEdit) {
+            alert(`Invalid quantity. Only ${stockAvailableForEdit} available in stock for "${finalProductName}".`);
             return;
         }
 
         if (saleToEdit) {
             const updatedSalePayload = {
                 ...saleToEdit,
-                inventoryItemId: item.id,
-                productName: item.name,
+                inventoryItemId: finalItemId,
+                productName: finalProductName,
                 quantity: numQuantity,
                 totalPrice: numTotalPrice,
                 paymentMethod,
@@ -83,13 +180,13 @@ const SalesForm: React.FC<SalesFormProps> = ({ onClose, saleToEdit }) => {
             updateSale(updatedSalePayload);
         } else {
             const newSalePayload = {
-                inventoryItemId: item.id,
-                productName: item.name,
+                inventoryItemId: finalItemId,
+                productName: finalProductName,
                 quantity: numQuantity,
                 totalPrice: numTotalPrice,
                 paymentMethod,
             };
-            console.log(`[SalesForm] Submitting new sale for item: ${item.name}`, newSalePayload);
+            console.log(`[SalesForm] Submitting new sale for item: ${finalProductName}`, newSalePayload);
             addSale(newSalePayload);
         }
         onClose();
@@ -97,13 +194,76 @@ const SalesForm: React.FC<SalesFormProps> = ({ onClose, saleToEdit }) => {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-                <label htmlFor="product" className="block text-sm font-medium text-text-muted">Product</label>
-                <select id="product" value={itemId} onChange={e => setItemId(e.target.value)} required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm">
-                    <option value="">Select a product</option>
-                    {inventory?.map(item => <option key={item.id} value={item.id}>{item.name} (Stock: {item.stock})</option>)}
-                </select>
+            <div className="relative" ref={searchRef}>
+                <label htmlFor="product-search" className="block text-sm font-medium text-text-muted">Product</label>
+                <input
+                    id="product-search"
+                    type="text"
+                    value={productSearch}
+                    onChange={(e) => {
+                        setProductSearch(e.target.value);
+                        setItemId('');
+                        setIsCreatingNewItem(false);
+                        setIsDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsDropdownOpen(true)}
+                    placeholder="Search or type to add new..."
+                    autoComplete="off"
+                    className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                />
+                 {isDropdownOpen && (
+                    <div className="absolute z-20 w-full mt-1 bg-surface border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {filteredInventory.map(invItem => (
+                            <div
+                                key={invItem.id}
+                                onClick={() => {
+                                    setItemId(invItem.id);
+                                    setProductSearch(invItem.name);
+                                    setIsCreatingNewItem(false);
+                                    setIsDropdownOpen(false);
+                                }}
+                                className="cursor-pointer px-4 py-2 text-sm text-text-main hover:bg-surface-hover flex justify-between"
+                            >
+                                <span>{invItem.name}</span>
+                                <span className="text-text-muted">Stock: {invItem.stock}</span>
+                            </div>
+                        ))}
+                        {filteredInventory.length === 0 && productSearch.trim() !== '' && (
+                             <div
+                                onClick={() => {
+                                    setIsCreatingNewItem(true);
+                                    setItemId('');
+                                    setIsDropdownOpen(false);
+                                }}
+                                className="cursor-pointer px-4 py-2 text-sm text-text-main hover:bg-surface-hover flex items-center gap-2"
+                            >
+                                <PlusIcon /> <span>Add "{productSearch.trim()}" to inventory</span>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
+            
+            {isCreatingNewItem && !saleToEdit && (
+                <div className="space-y-4 p-4 border border-dashed border-border rounded-lg bg-background/50">
+                    <h4 className="text-sm font-semibold text-text-main">New Item Details</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                         <div>
+                            <label htmlFor="newItemPrice" className="block text-xs font-medium text-text-muted">Selling Price (₹)</label>
+                            <input type="number" id="newItemPrice" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
+                        </div>
+                        <div>
+                            <label htmlFor="newItemCost" className="block text-xs font-medium text-text-muted">Cost Price (₹)</label>
+                            <input type="number" id="newItemCost" value={newItemCost} onChange={e => setNewItemCost(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
+                        </div>
+                    </div>
+                    <label className="flex items-center cursor-pointer">
+                        <input type="checkbox" checked={newItemHasGst} onChange={e => setNewItemHasGst(e.target.checked)} className="h-4 w-4 rounded text-primary border-border focus:ring-primary bg-background" />
+                        <span className="ml-2 text-sm text-text-main">Includes GST</span>
+                    </label>
+                </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label htmlFor="quantity" className="block text-sm font-medium text-text-muted">Quantity</label>
@@ -174,6 +334,44 @@ const GstFilterComponent: React.FC<{ filter: GstFilter, setFilter: (filter: GstF
         </div>
     );
 };
+
+const SaleCard: React.FC<{ sale: Sale; onEdit: () => void; onDelete: () => void; }> = ({ sale, onEdit, onDelete }) => (
+    <div className="bg-surface p-4 rounded-lg border border-border flex flex-col space-y-2">
+        <div className="flex justify-between items-start">
+             <div className="flex-1 pr-4">
+                <h3 className="font-bold text-text-main leading-tight">{sale.productName}</h3>
+                <p className="text-sm text-text-muted mt-1">
+                    {new Date(sale.date).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
+                </p>
+            </div>
+             <div className="flex items-center space-x-1">
+                <button 
+                    onClick={onEdit} 
+                    className="text-primary hover:text-primary-focus p-3 rounded-full hover:bg-surface-hover transition-colors"
+                >
+                    <EditIcon />
+                </button>
+                <button 
+                    onClick={onDelete} 
+                    className="text-danger hover:opacity-80 p-3 rounded-full hover:bg-surface-hover transition-colors"
+                >
+                    <DeleteIcon />
+                </button>
+            </div>
+        </div>
+        
+        <div className="flex justify-between items-center pt-2 border-t border-border/50">
+            <div className="text-sm text-text-muted space-x-4 flex items-center">
+                <span>Qty: <span className="font-semibold text-text-main">{sale.quantity}</span></span>
+                 <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${ sale.paymentMethod === 'Online' ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-500/10 text-gray-400' }`}>
+                    {sale.paymentMethod || 'Offline'}
+                </span>
+                {sale.has_gst && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
+            </div>
+             <span className="font-semibold text-lg text-success">₹{sale.totalPrice.toFixed(2)}</span>
+        </div>
+    </div>
+);
 
 
 const Sales: React.FC = () => {
@@ -291,52 +489,6 @@ const Sales: React.FC = () => {
         }
     };
 
-    const SaleCard: React.FC<{sale: Sale}> = ({ sale }) => (
-        <div className="bg-surface p-4 rounded-lg border border-border flex flex-col space-y-2">
-            <div className="flex justify-between items-start">
-                 <div className="flex-1 pr-4">
-                    <h3 className="font-bold text-text-main leading-tight">{sale.productName}</h3>
-                    <p className="text-sm text-text-muted mt-1">
-                        {new Date(sale.date).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
-                    </p>
-                </div>
-                 <div className="flex items-center space-x-1">
-                    <button 
-                        onClick={(e) => { 
-                            e.stopPropagation();
-                            console.log(`[SaleCard] Edit button clicked for sale ID: ${sale.id}`);
-                            handleOpenModal(sale);
-                        }} 
-                        className="text-primary hover:text-primary-focus p-2 rounded-full hover:bg-surface-hover transition-colors"
-                    >
-                        <EditIcon />
-                    </button>
-                    <button 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            console.log(`[SaleCard] Delete button clicked for sale ID: ${sale.id}`);
-                            openDeleteConfirm(sale);
-                        }} 
-                        className="text-danger hover:opacity-80 p-2 rounded-full hover:bg-surface-hover transition-colors"
-                    >
-                        <DeleteIcon />
-                    </button>
-                </div>
-            </div>
-            
-            <div className="flex justify-between items-center pt-2 border-t border-border/50">
-                <div className="text-sm text-text-muted space-x-4 flex items-center">
-                    <span>Qty: <span className="font-semibold text-text-main">{sale.quantity}</span></span>
-                     <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${ sale.paymentMethod === 'Online' ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-500/10 text-gray-400' }`}>
-                        {sale.paymentMethod || 'Offline'}
-                    </span>
-                    {sale.has_gst && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
-                </div>
-                 <span className="font-semibold text-lg text-success">₹{sale.totalPrice.toFixed(2)}</span>
-            </div>
-        </div>
-    );
-
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
@@ -393,7 +545,14 @@ const Sales: React.FC = () => {
             {/* Mobile Card View */}
             <div className="md:hidden space-y-4 pb-20">
                 {sortedSales.length > 0 ? (
-                    sortedSales.map(sale => <SaleCard key={sale.id} sale={sale} />)
+                    sortedSales.map(sale => 
+                        <SaleCard 
+                            key={sale.id} 
+                            sale={sale} 
+                            onEdit={() => handleOpenModal(sale)}
+                            onDelete={() => openDeleteConfirm(sale)}
+                        />
+                    )
                 ) : (
                     <div className="text-center py-10 text-text-muted bg-surface rounded-lg border border-border">
                         <p className="font-semibold">No Sales Found</p>
@@ -408,12 +567,12 @@ const Sales: React.FC = () => {
                     <table className="min-w-full divide-y divide-border">
                         <thead className="bg-background">
                             <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Product</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Quantity</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Total Price (₹)</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Payment Method</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Date</th>
-                                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Actions</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Product</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Quantity</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Total Price (₹)</th>
+                                <th scope="col" className="hidden lg:table-cell px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Payment Method</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Date</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -427,15 +586,15 @@ const Sales: React.FC = () => {
                             )}
                             {sortedSales.map((sale: Sale) => (
                                 <tr key={sale.id} className="hover:bg-surface-hover/50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-text-main">
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm font-medium text-text-main">
                                         <div className="flex items-center gap-2">
                                             {sale.productName}
                                             {sale.has_gst && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">{sale.quantity}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">₹{sale.totalPrice.toFixed(2)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">{sale.quantity}</td>
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">₹{sale.totalPrice.toFixed(2)}</td>
+                                    <td className="hidden lg:table-cell px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                             sale.paymentMethod === 'Online'
                                             ? 'bg-blue-500/10 text-blue-400'
@@ -444,8 +603,8 @@ const Sales: React.FC = () => {
                                             {sale.paymentMethod || 'Offline'}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">{new Date(sale.date).toLocaleString()}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">{new Date(sale.date).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex justify-end space-x-2">
                                             <button onClick={() => handleOpenModal(sale)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-surface-hover transition-colors"><EditIcon /></button>
                                             <button onClick={() => openDeleteConfirm(sale)} className="text-danger hover:opacity-80 p-1 rounded-full hover:bg-surface-hover transition-colors"><DeleteIcon /></button>

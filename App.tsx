@@ -17,7 +17,7 @@ export const ShopContext = React.createContext<{
   addSale: (sale: Omit<Sale, 'id' | 'date' | 'user_id'>) => void;
   updateSale: (updatedSale: Sale) => void;
   deleteSale: (saleId: string) => void;
-  addInventoryItem: (item: Omit<InventoryItem, 'id' | 'user_id'>) => void;
+  addInventoryItem: (item: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<InventoryItem | null>;
   updateInventoryItem: (item: InventoryItem) => void;
   deleteInventoryItem: (itemId: string) => void;
 }>({
@@ -26,7 +26,7 @@ export const ShopContext = React.createContext<{
   addSale: () => {},
   updateSale: () => {},
   deleteSale: () => {},
-  addInventoryItem: () => {},
+  addInventoryItem: async () => null,
   updateInventoryItem: () => {},
   deleteInventoryItem: () => {},
 });

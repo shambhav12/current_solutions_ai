@@ -116,6 +116,43 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit }) =>
     );
 };
 
+const InventoryCard: React.FC<{ item: InventoryItem; onEdit: () => void; onDelete: () => void; }> = ({ item, onEdit, onDelete }) => (
+    <div className="bg-surface p-4 rounded-lg border border-border flex flex-col space-y-3">
+         <div className="flex justify-between items-start">
+            <div className="flex items-center gap-2">
+                 <span className="font-bold text-text-main pr-4">{item.name}</span>
+                 {item.has_gst && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
+            </div>
+            <span className={`font-semibold text-lg px-2 py-0.5 rounded ${item.stock < 10 ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
+                {item.stock} in stock
+            </span>
+        </div>
+        <div className="flex items-center space-x-4 text-sm text-text-muted">
+            <p>Price: <span className="text-text-main">₹{item.price.toFixed(2)}</span></p>
+            <p>Cost: <span className="text-text-main">₹{item.cost.toFixed(2)}</span></p>
+        </div>
+        <div className="text-xs text-text-muted space-y-1 pt-2 border-t border-border/50">
+            <p>Created: {item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A'}</p>
+            <p>Updated: {item.updated_at ? new Date(item.updated_at).toLocaleString() : 'N/A'}</p>
+        </div>
+        <div className="flex justify-end space-x-2 pt-2">
+            <button 
+                onClick={onEdit}
+                className="text-primary hover:text-primary-focus p-3 rounded-full hover:bg-surface-hover transition-colors"
+            >
+                <EditIcon />
+            </button>
+            <button 
+                onClick={onDelete}
+                className="text-danger hover:opacity-80 p-3 rounded-full hover:bg-surface-hover transition-colors"
+            >
+                <DeleteIcon />
+            </button>
+        </div>
+    </div>
+);
+
+
 const Inventory: React.FC = () => {
     const { inventory, sales, deleteInventoryItem } = useContext(ShopContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -183,48 +220,12 @@ const Inventory: React.FC = () => {
             deleteInventoryItem(itemToDelete.id);
         }
     }
-    
-    const InventoryCard: React.FC<{item: InventoryItem}> = ({ item }) => (
-        <div className="bg-surface p-4 rounded-lg border border-border flex flex-col space-y-3">
-             <div className="flex justify-between items-start">
-                <div className="flex items-center gap-2">
-                     <span className="font-bold text-text-main pr-4">{item.name}</span>
-                     {item.has_gst && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
-                </div>
-                <span className={`font-semibold text-lg px-2 py-0.5 rounded ${item.stock < 10 ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
-                    {item.stock} in stock
-                </span>
-            </div>
-            <div className="flex items-center space-x-4 text-sm text-text-muted">
-                <p>Price: <span className="text-text-main">₹{item.price.toFixed(2)}</span></p>
-                <p>Cost: <span className="text-text-main">₹{item.cost.toFixed(2)}</span></p>
-            </div>
-            <div className="text-xs text-text-muted space-y-1 pt-2 border-t border-border/50">
-                <p>Created: {item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A'}</p>
-                <p>Updated: {item.updated_at ? new Date(item.updated_at).toLocaleString() : 'N/A'}</p>
-            </div>
-            <div className="flex justify-end space-x-2 pt-2">
-                <button 
-                    onClick={() => {
-                        console.log(`[InventoryCard] Edit button clicked for item ID: ${item.id}, Name: ${item.name}`);
-                        handleOpenModal(item);
-                    }} 
-                    className="text-primary hover:text-primary-focus p-2 rounded-full hover:bg-surface-hover transition-colors"
-                >
-                    <EditIcon />
-                </button>
-                <button 
-                    onClick={() => {
-                        console.log(`[InventoryCard] Delete button clicked for item ID: ${item.id}, Name: ${item.name}`);
-                        openDeleteConfirm(item);
-                    }} 
-                    className="text-danger hover:opacity-80 p-2 rounded-full hover:bg-surface-hover transition-colors"
-                >
-                    <DeleteIcon />
-                </button>
-            </div>
-        </div>
-    );
+
+    const formatShortDateTime = (dateString?: string) => {
+        if (!dateString) return 'N/A';
+        return new Date(dateString).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
+
 
     return (
         <div className="space-y-6">
@@ -284,7 +285,14 @@ const Inventory: React.FC = () => {
             {/* Mobile Card View */}
             <div className="md:hidden space-y-4">
                  {filteredInventory.length > 0 ? (
-                    filteredInventory.map(item => <InventoryCard key={item.id} item={item} />)
+                    filteredInventory.map(item => 
+                        <InventoryCard 
+                            key={item.id} 
+                            item={item}
+                            onEdit={() => handleOpenModal(item)}
+                            onDelete={() => openDeleteConfirm(item)}
+                        />
+                    )
                 ) : (
                      <div className="text-center py-10 text-text-muted bg-surface rounded-lg border border-border">
                         <p className="font-semibold">No Items Found</p>
@@ -299,14 +307,14 @@ const Inventory: React.FC = () => {
                     <table className="min-w-full divide-y divide-border">
                         <thead className="bg-background">
                             <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Product</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Stock</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">GST</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Price (₹)</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Cost (₹)</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Created On</th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Last Updated</th>
-                                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Actions</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Product</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Stock</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">GST</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Price (₹)</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Cost (₹)</th>
+                                <th scope="col" className="hidden md:table-cell px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Created On</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Last Updated</th>
+                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -320,19 +328,19 @@ const Inventory: React.FC = () => {
                             )}
                             {filteredInventory.map((item: InventoryItem) => (
                                 <tr key={item.id} className="hover:bg-surface-hover/50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-text-main">{item.name}</td>
-                                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-semibold ${item.stock < 10 ? 'text-danger' : 'text-text-main'}`}>{item.stock}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm font-medium text-text-main">{item.name}</td>
+                                    <td className={`px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm font-semibold ${item.stock < 10 ? 'text-danger' : 'text-text-main'}`}>{item.stock}</td>
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">
                                         {item.has_gst ? 
                                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-info/10 text-info">Yes</span> : 
                                             <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-500/10 text-gray-400">No</span>
                                         }
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">₹{item.price.toFixed(2)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">₹{item.cost.toFixed(2)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">{item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-muted">{item.updated_at ? new Date(item.updated_at).toLocaleString() : 'N/A'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">₹{item.price.toFixed(2)}</td>
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">₹{item.cost.toFixed(2)}</td>
+                                    <td className="hidden md:table-cell px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">{formatShortDateTime(item.created_at)}</td>
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">{formatShortDateTime(item.updated_at)}</td>
+                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex justify-end space-x-2">
                                             <button onClick={() => handleOpenModal(item)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-surface-hover transition-colors"><EditIcon /></button>
                                             <button onClick={() => openDeleteConfirm(item)} className="text-danger hover:opacity-80 p-1 rounded-full hover:bg-surface-hover transition-colors"><DeleteIcon /></button>

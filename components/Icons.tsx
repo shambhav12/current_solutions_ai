@@ -104,3 +104,8 @@ export const InventoryValueIcon = () => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
     </svg>
 );
+export const GstPayableIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h8a2 2 0 002-2v-1a2 2 0 012-2h1.945M7.721 16h8.558M12 18.25V21m-4.75-2.75L4 21m9.5 0l3.75-2.75M3 12a9 9 0 0118 0v-1.75a2 2 0 00-2-2H5a2 2 0 00-2 2V12z" />
+    </svg>
+);
