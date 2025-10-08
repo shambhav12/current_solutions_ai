@@ -15,6 +15,7 @@ export interface Sale {
     date: string; // ISO string
     paymentMethod: 'Online' | 'Offline';
     has_gst?: boolean;
+    itemCostAtSale?: number;
 }
 
 export interface InventoryItem {

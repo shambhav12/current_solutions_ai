@@ -75,7 +75,7 @@ const Dashboard: React.FC = () => {
 
     const totalProfit = useMemo(() =>
         filteredSales.reduce((acc, sale) => {
-            const itemCost = inventoryCostMap.get(sale.inventoryItemId) || 0;
+            const itemCost = sale.itemCostAtSale ?? inventoryCostMap.get(sale.inventoryItemId) ?? 0;
             const saleProfit = sale.totalPrice - (itemCost * sale.quantity);
             return acc + saleProfit;
         }, 0),
@@ -114,7 +114,7 @@ const Dashboard: React.FC = () => {
         filteredSales.reduce((acc, sale) => {
             if (sale.has_gst) {
                 // Assumes item.cost in inventory is pre-tax
-                const itemCost = inventoryCostMap.get(sale.inventoryItemId) || 0;
+                const itemCost = sale.itemCostAtSale ?? inventoryCostMap.get(sale.inventoryItemId) ?? 0;
                 const inputGstForItem = (itemCost * sale.quantity) * 0.18;
                 return acc + inputGstForItem;
             }

@@ -30,7 +30,6 @@ export const useShopData = () => {
           if (isCancelled) return;
           
           const inventoryMap = new Map(inventoryData.map(item => [item.id, item.name]));
-          const inventoryGstMap = new Map(inventoryData.map(item => [item.id, item.has_gst]));
           
           // Step 2: Fetch all sales records for the user from Supabase.
           const { data: salesData, error: salesError } = await supabase
@@ -51,7 +50,8 @@ export const useShopData = () => {
               totalPrice: sale.totalPrice,
               date: sale.date,
               paymentMethod: sale.payment_method || 'Offline', // Map from snake_case to camelCase
-              has_gst: inventoryGstMap.get(sale.inventoryItemId) || false,
+              has_gst: sale.has_gst, // Use historical GST status from the sale record
+              itemCostAtSale: sale.item_cost_at_sale,
           }));
           
           // Step 4: Update the application state with the data fetched from Supabase.
@@ -130,6 +130,8 @@ export const useShopData = () => {
           payment_method: paymentMethod,
           date: new Date().toISOString(),
           user_id: user.id,
+          item_cost_at_sale: currentItemBeforeSale.cost,
+          has_gst: currentItemBeforeSale.has_gst, // Store historical GST status
         };
 
         // Step 3: Insert the new sale into Supabase.
@@ -159,7 +161,8 @@ export const useShopData = () => {
           totalPrice: newSaleFromDb.totalPrice,
           date: newSaleFromDb.date,
           paymentMethod: newSaleFromDb.payment_method,
-          has_gst: currentItemBeforeSale.has_gst,
+          has_gst: newSaleFromDb.has_gst,
+          itemCostAtSale: newSaleFromDb.item_cost_at_sale,
         };
         
         setSales((prev) => (prev ? [...prev, newSaleForState] : [newSaleForState]));
@@ -202,7 +205,9 @@ export const useShopData = () => {
             productName: updatedSale.productName,
             quantity: updatedSale.quantity,
             totalPrice: updatedSale.totalPrice,
-            payment_method: updatedSale.paymentMethod, // Map to snake_case
+            payment_method: updatedSale.paymentMethod,
+            item_cost_at_sale: item.cost,
+            has_gst: item.has_gst, // Store historical GST status
           })
           .eq('id', updatedSale.id)
           .select()
@@ -225,7 +230,8 @@ export const useShopData = () => {
         totalPrice: updatedSaleFromDb.totalPrice,
         date: updatedSaleFromDb.date,
         paymentMethod: updatedSaleFromDb.payment_method,
-        has_gst: item.has_gst,
+        has_gst: updatedSaleFromDb.has_gst,
+        itemCostAtSale: updatedSaleFromDb.item_cost_at_sale,
       };
 
       setSales((prev) =>
