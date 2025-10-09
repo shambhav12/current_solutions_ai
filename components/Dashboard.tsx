@@ -4,7 +4,9 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { useFilters } from '../FilterContext';
 import DateFilterComponent from './ui/DateFilter';
 import { Sale } from '../types';
-import { RevenueIcon, ProfitIcon, OnlineIcon, OfflineIcon, GstIcon, InventoryValueIcon, GstPayableIcon } from './Icons';
+import { RevenueIcon, ProfitIcon, OnlineIcon, OfflineIcon, GstIcon, GstPayableIcon } from './Icons';
+import { StatCard } from './ui/StatCard';
+
 
 // Helper function to filter sales
 const filterSalesByDate = (sales: Sale[], dateFilter: ReturnType<typeof useFilters>['dateFilter']) => {
@@ -39,19 +41,6 @@ const filterSalesByDate = (sales: Sale[], dateFilter: ReturnType<typeof useFilte
             return sales;
     }
 };
-
-const StatCard: React.FC<{ title: string; value: string; subtext?: string; icon: React.ReactNode }> = ({ title, value, subtext, icon }) => (
-    <div className="bg-surface p-6 rounded-lg shadow-lg border border-border flex items-center space-x-4 transition-transform duration-200 hover:scale-[1.02] hover:shadow-primary/20">
-        <div className="p-3 rounded-full bg-primary/10 text-primary">
-            {icon}
-        </div>
-        <div>
-            <h3 className="text-sm font-medium text-text-muted">{title}</h3>
-            <p className="text-2xl font-bold text-text-main mt-1">{value}</p>
-            {subtext && <p className="text-xs text-text-muted mt-1">{subtext}</p>}
-        </div>
-    </div>
-);
 
 const Dashboard: React.FC = () => {
     const { sales, inventory } = useContext(ShopContext);
@@ -125,12 +114,6 @@ const Dashboard: React.FC = () => {
 
     const netGstPayable = useMemo(() => outputGst - inputGstOnSoldItems, [outputGst, inputGstOnSoldItems]);
 
-
-    const totalInventoryValue = useMemo(() =>
-        inventory.reduce((acc, item) => acc + item.stock * item.price, 0),
-        [inventory]
-    );
-
     const salesOverTime = useMemo(() => {
         const salesByDay: { [key: string]: number } = {};
         filteredSales.forEach(sale => {
@@ -168,7 +151,6 @@ const Dashboard: React.FC = () => {
                 <StatCard title="Total Profit" value={`₹${totalProfit.toFixed(2)}`} subtext={dateFilter.label} icon={<ProfitIcon />} />
                 <StatCard title="Online Revenue" value={`₹${onlineRevenue.toFixed(2)}`} subtext="Online payments" icon={<OnlineIcon />}/>
                 <StatCard title="Offline Revenue" value={`₹${offlineRevenue.toFixed(2)}`} subtext="Cash payments" icon={<OfflineIcon />}/>
-                <StatCard title="Inventory Value" value={`₹${totalInventoryValue.toFixed(2)}`} subtext="Current stock value" icon={<InventoryValueIcon />} />
                 <StatCard title="Total GST Sales" value={`₹${totalGstSales.toFixed(2)}`} subtext="Revenue from GST items" icon={<GstIcon />} />
                 <StatCard title="Output GST (Collected)" value={`₹${outputGst.toFixed(2)}`} subtext="From sales @ 18%" icon={<GstIcon />} />
                 <StatCard title="Input GST (Credit)" value={`₹${inputGstOnSoldItems.toFixed(2)}`} subtext="On cost of goods sold" icon={<GstIcon />} />

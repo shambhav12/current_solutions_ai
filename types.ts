@@ -5,6 +5,15 @@ export enum Page {
     Insights = 'INSIGHTS',
 }
 
+export interface Transaction {
+    id: string;
+    user_id: string;
+    total_price: number;
+    payment_method: 'Online' | 'Offline';
+    date: string; // ISO string
+    items: Sale[];
+}
+
 export interface Sale {
     id: string;
     user_id: string;
@@ -12,10 +21,11 @@ export interface Sale {
     productName: string;
     quantity: number;
     totalPrice: number;
-    date: string; // ISO string
-    paymentMethod: 'Online' | 'Offline';
+    date: string; // This is now sourced from the parent transaction
+    paymentMethod: 'Online' | 'Offline'; // This is now sourced from the parent transaction
     has_gst?: boolean;
     itemCostAtSale?: number;
+    transaction_id?: string;
 }
 
 export interface InventoryItem {

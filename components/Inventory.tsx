@@ -9,9 +9,10 @@ import { useDebounce } from '../hooks/useDebounce';
 interface InventoryFormProps {
     onClose: () => void;
     itemToEdit?: InventoryItem | null;
+    inventory: InventoryItem[];
 }
 
-const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit }) => {
+const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit, inventory }) => {
     const { addInventoryItem, updateInventoryItem } = useContext(ShopContext);
     const [name, setName] = useState('');
     const [stock, setStock] = useState<string>('0');
@@ -54,28 +55,39 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit }) =>
             alert('Invalid value. Cost cannot be negative.');
             return;
         }
+        if (numPrice < numCost) {
+            alert('Selling price cannot be less than the cost price.');
+            return;
+        }
 
+        const trimmedName = name.trim().toLowerCase();
         if (itemToEdit) {
+            if (inventory.some(item => item.id !== itemToEdit.id && item.name.trim().toLowerCase() === trimmedName)) {
+                alert('An item with this name already exists.');
+                return;
+            }
             const updatedItemPayload = { 
                 id: itemToEdit.id, 
                 user_id: itemToEdit.user_id, 
-                name, 
+                name: name.trim(), 
                 stock: numStock, 
                 price: numPrice, 
                 cost: numCost,
                 has_gst: hasGst,
             };
-            console.log(`[InventoryForm] Submitting update for item ID: ${itemToEdit.id}`, updatedItemPayload);
             updateInventoryItem(updatedItemPayload);
         } else {
+             if (inventory.some(item => item.name.trim().toLowerCase() === trimmedName)) {
+                alert('An item with this name already exists.');
+                return;
+            }
             const newItemPayload = { 
-                name, 
+                name: name.trim(), 
                 stock: numStock, 
                 price: numPrice, 
                 cost: numCost,
                 has_gst: hasGst,
             };
-            console.log(`[InventoryForm] Submitting new item`, newItemPayload);
             addInventoryItem(newItemPayload);
         }
         onClose();
@@ -171,8 +183,13 @@ const Inventory: React.FC = () => {
         return null;
     }
 
+    const totalInventoryValue = useMemo(() =>
+        inventory.reduce((acc, item) => acc + item.stock * item.cost, 0),
+        [inventory]
+    );
+
     useEffect(() => {
-        if (searchTerm.length < 3) {
+        if (searchTerm.length < 1) {
             setSuggestions([]);
             return;
         }
@@ -229,10 +246,15 @@ const Inventory: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                <h2 className="text-3xl font-bold text-text-main">Inventory</h2>
-                <div className="flex items-center gap-4 w-full md:w-auto">
-                    <div className="relative flex-grow md:max-w-xs" ref={searchRef}>
+            <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold text-text-main">Inventory</h2>
+                    <p className="mt-1 text-text-muted font-semibold">
+                        INVENTORY VALUE: <span className="text-success">₹{totalInventoryValue.toFixed(2)}</span>
+                    </p>
+                </div>
+                <div className="flex items-center gap-4 w-full sm:w-auto">
+                    <div className="relative flex-grow sm:w-64" ref={searchRef}>
                         <input
                             type="text"
                             placeholder="Search inventory..."
@@ -240,17 +262,17 @@ const Inventory: React.FC = () => {
                             onChange={e => setSearchTerm(e.target.value)}
                             className="w-full bg-surface border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                         />
-                         {suggestions.length > 0 && (
+                        {suggestions.length > 0 && (
                             <div className="absolute z-10 w-full mt-1 bg-surface border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
-                               {suggestions.map((s, index) => (
-                                   <div
-                                       key={index}
-                                       onClick={() => { setSearchTerm(s); setSuggestions([]); }}
-                                       className="cursor-pointer px-4 py-2 text-sm text-text-main hover:bg-surface-hover"
-                                   >
-                                       {s}
-                                   </div>
-                               ))}
+                            {suggestions.map((s, index) => (
+                                <div
+                                    key={index}
+                                    onClick={() => { setSearchTerm(s); setSuggestions([]); }}
+                                    className="cursor-pointer px-4 py-2 text-sm text-text-main hover:bg-surface-hover"
+                                >
+                                    {s}
+                                </div>
+                            ))}
                             </div>
                         )}
                     </div>
@@ -262,7 +284,7 @@ const Inventory: React.FC = () => {
             </div>
 
             <Modal title={itemToEdit ? "Edit Inventory Item" : "Add New Inventory Item"} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
-                <InventoryForm onClose={() => setIsModalOpen(false)} itemToEdit={itemToEdit} />
+                <InventoryForm onClose={() => setIsModalOpen(false)} itemToEdit={itemToEdit} inventory={inventory} />
             </Modal>
 
             <ConfirmationModal

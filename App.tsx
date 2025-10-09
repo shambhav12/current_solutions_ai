@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Page, Sale, InventoryItem } from './types';
+import { Page, Sale, InventoryItem, Transaction } from './types';
 import { useShopData } from './hooks/useShopData';
 import { useAuth } from './AuthContext';
 import { DashboardIcon, SalesIcon, InventoryIcon, InsightsIcon, MenuIcon, CloseIcon } from './components/Icons';
@@ -11,21 +11,25 @@ import LoginScreen from './components/LoginScreen';
 import UserMenu from './components/UserMenu';
 import { FilterProvider } from './FilterContext';
 
+type CartItem = Omit<Sale, 'id' | 'date' | 'user_id' | 'paymentMethod' | 'transaction_id'>;
+
 export const ShopContext = React.createContext<{
   sales: Sale[] | null;
+  transactions: Transaction[] | null;
   inventory: InventoryItem[] | null;
-  addSale: (sale: Omit<Sale, 'id' | 'date' | 'user_id'>) => void;
-  updateSale: (updatedSale: Sale) => void;
-  deleteSale: (saleId: string) => void;
+  addTransaction: (items: CartItem[], paymentMethod: 'Online' | 'Offline') => Promise<void>;
+  updateSale: (updatedSale: Sale) => void; // Note: For single-item edits, multi-item edit is complex.
+  deleteTransaction: (transactionId: string) => void;
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<InventoryItem | null>;
   updateInventoryItem: (item: InventoryItem) => void;
   deleteInventoryItem: (itemId: string) => void;
 }>({
   sales: null,
+  transactions: null,
   inventory: null,
-  addSale: () => {},
+  addTransaction: async () => {},
   updateSale: () => {},
-  deleteSale: () => {},
+  deleteTransaction: () => {},
   addInventoryItem: async () => null,
   updateInventoryItem: () => {},
   deleteInventoryItem: () => {},
@@ -37,10 +41,11 @@ const App: React.FC = () => {
 
   const {
     sales,
+    transactions,
     inventory,
-    addSale,
+    addTransaction,
     updateSale,
-    deleteSale,
+    deleteTransaction,
     addInventoryItem,
     updateInventoryItem,
     deleteInventoryItem,
@@ -66,15 +71,16 @@ const App: React.FC = () => {
   const shopContextValue = useMemo(
     () => ({
       sales,
+      transactions,
       inventory,
-      addSale,
+      addTransaction,
       updateSale,
-      deleteSale,
+      deleteTransaction,
       addInventoryItem,
       updateInventoryItem,
       deleteInventoryItem,
     }),
-    [sales, inventory, addSale, updateSale, deleteSale, addInventoryItem, updateInventoryItem, deleteInventoryItem]
+    [sales, transactions, inventory, addTransaction, updateSale, deleteTransaction, addInventoryItem, updateInventoryItem, deleteInventoryItem]
   );
 
   const renderPage = useCallback(() => {
