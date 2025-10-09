@@ -26,18 +26,22 @@ export interface Sale {
     has_gst?: boolean;
     itemCostAtSale?: number;
     transaction_id?: string;
+    sale_type?: 'loose' | 'bundle'; // New field to track sale type
 }
 
 export interface InventoryItem {
     id: string;
     user_id: string;
     name: string;
-    stock: number;
-    price: number;
-    cost: number;
+    stock: number; // Always refers to the count of individual units
+    price: number; // Price for one loose item
+    cost: number; // Cost for one loose item
     created_at?: string;
     updated_at?: string;
     has_gst?: boolean;
+    is_bundle?: boolean; // Is this item ever sold as a bundle?
+    bundle_price?: number; // Price for the entire bundle
+    items_per_bundle?: number; // How many loose items are in one bundle
 }
 
 export interface SalesPrediction {
@@ -51,6 +55,17 @@ export interface InventoryInsight {
     insight: string;
     suggestion: string;
 }
+
+// A more descriptive type for items being prepared for a transaction
+export type CartItemForTransaction = {
+    inventoryItemId: string;
+    productName: string;
+    quantity: number; // How many units or bundles are being sold
+    totalPrice: number;
+    sale_type: 'loose' | 'bundle';
+    items_per_bundle: number; // Need this for stock calculation
+};
+
 
 // Supabase user object has a different structure.
 // We map it to this simplified User type for use in the app.

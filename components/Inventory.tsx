@@ -19,6 +19,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit, inve
     const [price, setPrice] = useState<string>('0');
     const [cost, setCost] = useState<string>('0');
     const [hasGst, setHasGst] = useState(false);
+    // Bundle fields
+    const [isBundle, setIsBundle] = useState(false);
+    const [bundlePrice, setBundlePrice] = useState<string>('');
+    const [itemsPerBundle, setItemsPerBundle] = useState<string>('');
+
 
     useEffect(() => {
         if (itemToEdit) {
@@ -27,12 +32,19 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit, inve
             setPrice(String(itemToEdit.price.toFixed(2)));
             setCost(String(itemToEdit.cost.toFixed(2)));
             setHasGst(itemToEdit.has_gst || false);
+            setIsBundle(itemToEdit.is_bundle || false);
+            setBundlePrice(itemToEdit.bundle_price?.toFixed(2) || '');
+            setItemsPerBundle(String(itemToEdit.items_per_bundle || ''));
         } else {
+            // Reset form for new item
             setName('');
             setStock('0');
             setPrice('0');
             setCost('0');
             setHasGst(false);
+            setIsBundle(false);
+            setBundlePrice('');
+            setItemsPerBundle('');
         }
     }, [itemToEdit]);
 
@@ -42,53 +54,41 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit, inve
         const numStock = Number(stock);
         const numPrice = Number(price);
         const numCost = Number(cost);
+        const numBundlePrice = Number(bundlePrice);
+        const numItemsPerBundle = Number(itemsPerBundle);
 
-        if (!Number.isInteger(numStock) || numStock < 0) {
-            alert('Invalid value. Stock must be a non-negative whole number.');
-            return;
-        }
-         if (isNaN(numPrice) || numPrice < 0) {
-            alert('Invalid value. Price cannot be negative.');
-            return;
-        }
-        if (isNaN(numCost) || numCost < 0) {
-            alert('Invalid value. Cost cannot be negative.');
-            return;
-        }
-        if (numPrice < numCost) {
-            alert('Selling price cannot be less than the cost price.');
-            return;
+        if (!Number.isInteger(numStock) || numStock < 0) { alert('Stock must be a non-negative whole number.'); return; }
+        if (isNaN(numPrice) || numPrice < 0) { alert('Price cannot be negative.'); return; }
+        if (isNaN(numCost) || numCost < 0) { alert('Cost cannot be negative.'); return; }
+        if (numPrice < numCost) { alert('Selling price cannot be less than the cost price.'); return; }
+        
+        if (isBundle) {
+            if(isNaN(numBundlePrice) || numBundlePrice <= 0) { alert('Bundle price must be a positive number.'); return; }
+            if(!Number.isInteger(numItemsPerBundle) || numItemsPerBundle <= 1) { alert('Items per bundle must be a whole number greater than 1.'); return; }
         }
 
         const trimmedName = name.trim().toLowerCase();
+        const basePayload = {
+            name: name.trim(), 
+            stock: numStock, 
+            price: numPrice, 
+            cost: numCost,
+            has_gst: hasGst,
+            is_bundle: isBundle,
+            bundle_price: isBundle ? numBundlePrice : undefined,
+            items_per_bundle: isBundle ? numItemsPerBundle : undefined,
+        };
+
         if (itemToEdit) {
             if (inventory.some(item => item.id !== itemToEdit.id && item.name.trim().toLowerCase() === trimmedName)) {
-                alert('An item with this name already exists.');
-                return;
+                alert('An item with this name already exists.'); return;
             }
-            const updatedItemPayload = { 
-                id: itemToEdit.id, 
-                user_id: itemToEdit.user_id, 
-                name: name.trim(), 
-                stock: numStock, 
-                price: numPrice, 
-                cost: numCost,
-                has_gst: hasGst,
-            };
-            updateInventoryItem(updatedItemPayload);
+            updateInventoryItem({ ...basePayload, id: itemToEdit.id, user_id: itemToEdit.user_id });
         } else {
              if (inventory.some(item => item.name.trim().toLowerCase() === trimmedName)) {
-                alert('An item with this name already exists.');
-                return;
+                alert('An item with this name already exists.'); return;
             }
-            const newItemPayload = { 
-                name: name.trim(), 
-                stock: numStock, 
-                price: numPrice, 
-                cost: numCost,
-                has_gst: hasGst,
-            };
-            addInventoryItem(newItemPayload);
+            addInventoryItem(basePayload);
         }
         onClose();
     };
@@ -101,24 +101,45 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit, inve
             </div>
             <div className="grid grid-cols-3 gap-4">
                 <div>
-                    <label htmlFor="stock" className="block text-sm font-medium text-text-muted">Stock</label>
+                    <label htmlFor="stock" className="block text-sm font-medium text-text-muted">Stock (Units)</label>
                     <input type="number" id="stock" value={stock} onChange={e => setStock(e.target.value)} min="0" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
                 </div>
                 <div>
-                    <label htmlFor="price" className="block text-sm font-medium text-text-muted">Price (₹)</label>
+                    <label htmlFor="price" className="block text-sm font-medium text-text-muted">Loose Price (₹)</label>
                     <input type="number" id="price" value={price} onChange={e => setPrice(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
                 </div>
                  <div>
-                    <label htmlFor="cost" className="block text-sm font-medium text-text-muted">Cost (₹)</label>
+                    <label htmlFor="cost" className="block text-sm font-medium text-text-muted">Cost per Unit (₹)</label>
                     <input type="number" id="cost" value={cost} onChange={e => setCost(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
                 </div>
             </div>
-             <div className="pt-2">
+             <div className="pt-2 space-y-4">
                 <label className="flex items-center cursor-pointer">
                     <input type="checkbox" checked={hasGst} onChange={e => setHasGst(e.target.checked)} className="h-4 w-4 rounded text-primary border-border focus:ring-primary bg-background" />
                     <span className="ml-2 text-sm text-text-main">Includes GST</span>
                 </label>
+                 <label className="flex items-center cursor-pointer">
+                    <input type="checkbox" checked={isBundle} onChange={e => setIsBundle(e.target.checked)} className="h-4 w-4 rounded text-primary border-border focus:ring-primary bg-background" />
+                    <span className="ml-2 text-sm text-text-main">Is Bundle Item? (e.g., sold as pack)</span>
+                </label>
             </div>
+
+            {isBundle && (
+                 <div className="p-4 border border-dashed border-primary/50 rounded-lg space-y-4 bg-primary/5">
+                    <h4 className="text-sm font-semibold text-text-main">Bundle Details</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="bundle-price" className="block text-sm font-medium text-text-muted">Bundle Price (₹)</label>
+                            <input type="number" id="bundle-price" value={bundlePrice} onChange={e => setBundlePrice(e.target.value)} min="0.01" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                        </div>
+                        <div>
+                            <label htmlFor="items-per-bundle" className="block text-sm font-medium text-text-muted">Items per Bundle</label>
+                            <input type="number" id="items-per-bundle" value={itemsPerBundle} onChange={e => setItemsPerBundle(e.target.value)} min="2" step="1" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="flex justify-end pt-4">
                 <button type="submit" className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors">
                     {itemToEdit ? 'Update Item' : 'Add Item'}
@@ -128,41 +149,66 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit, inve
     );
 };
 
-const InventoryCard: React.FC<{ item: InventoryItem; onEdit: () => void; onDelete: () => void; }> = ({ item, onEdit, onDelete }) => (
-    <div className="bg-surface p-4 rounded-lg border border-border flex flex-col space-y-3">
-         <div className="flex justify-between items-start">
-            <div className="flex items-center gap-2">
-                 <span className="font-bold text-text-main pr-4">{item.name}</span>
-                 {item.has_gst && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
+const getBundleDisplayInfo = (item: InventoryItem): { fullBundles: number, remainingUnits: number, canBeBundled: boolean } => {
+    const itemsPerBundle = Number(item.items_per_bundle);
+    const stock = Number(item.stock);
+    const canBeBundled = !!(item.is_bundle && itemsPerBundle > 1);
+
+    if (!canBeBundled) {
+        return { fullBundles: 0, remainingUnits: stock, canBeBundled: false };
+    }
+
+    const fullBundles = Math.floor(stock / itemsPerBundle);
+    const remainingUnits = stock % itemsPerBundle;
+
+    return { fullBundles, remainingUnits, canBeBundled: true };
+};
+
+
+const InventoryCard: React.FC<{ item: InventoryItem; onEdit: () => void; onDelete: () => void; }> = ({ item, onEdit, onDelete }) => {
+    const { fullBundles, remainingUnits, canBeBundled } = getBundleDisplayInfo(item);
+    
+    return (
+        <div className="bg-surface p-4 rounded-lg border border-border flex flex-col space-y-3">
+             <div className="flex justify-between items-start">
+                <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0 pr-2">
+                     <span className="font-bold text-text-main truncate">{item.name}</span>
+                     {item.has_gst && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
+                     {item.is_bundle && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary/10 text-primary">Bundle</span>}
+                </div>
+                <div className="text-right flex-shrink-0">
+                    <span className={`font-semibold text-lg px-2 py-0.5 rounded ${item.stock < 10 ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
+                        {item.stock} in stock
+                    </span>
+                    {canBeBundled && (
+                        <p className="text-xs text-text-muted mt-1">
+                            ({fullBundles} bundles + {remainingUnits} loose)
+                        </p>
+                    )}
+                </div>
             </div>
-            <span className={`font-semibold text-lg px-2 py-0.5 rounded ${item.stock < 10 ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
-                {item.stock} in stock
-            </span>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-muted">
+                <p>Loose Price: <span className="text-text-main">₹{item.price.toFixed(2)}</span></p>
+                {item.is_bundle && <p>Bundle Price: <span className="text-text-main">₹{item.bundle_price?.toFixed(2)}</span> ({item.items_per_bundle} units)</p>}
+                <p>Cost/Unit: <span className="text-text-main">₹{item.cost.toFixed(2)}</span></p>
+            </div>
+            <div className="flex justify-end space-x-2 pt-2 border-t border-border/50">
+                <button 
+                    onClick={onEdit}
+                    className="text-primary hover:text-primary-focus p-3 rounded-full hover:bg-surface-hover transition-colors"
+                >
+                    <EditIcon />
+                </button>
+                <button 
+                    onClick={onDelete}
+                    className="text-danger hover:opacity-80 p-3 rounded-full hover:bg-surface-hover transition-colors"
+                >
+                    <DeleteIcon />
+                </button>
+            </div>
         </div>
-        <div className="flex items-center space-x-4 text-sm text-text-muted">
-            <p>Price: <span className="text-text-main">₹{item.price.toFixed(2)}</span></p>
-            <p>Cost: <span className="text-text-main">₹{item.cost.toFixed(2)}</span></p>
-        </div>
-        <div className="text-xs text-text-muted space-y-1 pt-2 border-t border-border/50">
-            <p>Created: {item.created_at ? new Date(item.created_at).toLocaleString() : 'N/A'}</p>
-            <p>Updated: {item.updated_at ? new Date(item.updated_at).toLocaleString() : 'N/A'}</p>
-        </div>
-        <div className="flex justify-end space-x-2 pt-2">
-            <button 
-                onClick={onEdit}
-                className="text-primary hover:text-primary-focus p-3 rounded-full hover:bg-surface-hover transition-colors"
-            >
-                <EditIcon />
-            </button>
-            <button 
-                onClick={onDelete}
-                className="text-danger hover:opacity-80 p-3 rounded-full hover:bg-surface-hover transition-colors"
-            >
-                <DeleteIcon />
-            </button>
-        </div>
-    </div>
-);
+    );
+};
 
 
 const Inventory: React.FC = () => {
@@ -178,7 +224,6 @@ const Inventory: React.FC = () => {
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const searchRef = useRef<HTMLDivElement>(null);
 
-    // Guard against rendering until data is loaded
     if (!inventory || !sales) {
         return null;
     }
@@ -197,7 +242,7 @@ const Inventory: React.FC = () => {
             const filteredSuggestions = inventory
                 .filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
                 .map(item => item.name)
-                .slice(0, 5); // Limit suggestions
+                .slice(0, 5);
             setSuggestions(filteredSuggestions);
         }
     }, [searchTerm, inventory]);
@@ -233,16 +278,9 @@ const Inventory: React.FC = () => {
 
     const handleDelete = () => {
         if(itemToDelete) {
-            console.log(`[Inventory] Confirming delete for item ID: ${itemToDelete.id}, Name: ${itemToDelete.name}`);
             deleteInventoryItem(itemToDelete.id);
         }
     }
-
-    const formatShortDateTime = (dateString?: string) => {
-        if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    };
-
 
     return (
         <div className="space-y-6">
@@ -329,47 +367,58 @@ const Inventory: React.FC = () => {
                     <table className="min-w-full divide-y divide-border">
                         <thead className="bg-background">
                             <tr>
-                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Product</th>
-                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Stock</th>
-                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">GST</th>
-                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Price (₹)</th>
-                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Cost (₹)</th>
-                                <th scope="col" className="hidden md:table-cell px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Created On</th>
-                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Last Updated</th>
-                                <th scope="col" className="px-2 md:px-3 lg:px-4 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Actions</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Product</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Stock</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Prices (Loose / Bundle)</th>
+                                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider">Cost/Unit</th>
+                                <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-text-muted uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                              {filteredInventory.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="text-center py-10 text-text-muted">
+                                    <td colSpan={5} className="text-center py-10 text-text-muted">
                                         <p className="font-semibold">No Items Found</p>
                                         <p className="text-sm mt-1">No inventory items match your search.</p>
                                     </td>
                                 </tr>
                             )}
-                            {filteredInventory.map((item: InventoryItem) => (
+                            {filteredInventory.map((item: InventoryItem) => {
+                                const { fullBundles, remainingUnits, canBeBundled } = getBundleDisplayInfo(item);
+                                return (
                                 <tr key={item.id} className="hover:bg-surface-hover/50">
-                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm font-medium text-text-main">{item.name}</td>
-                                    <td className={`px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm font-semibold ${item.stock < 10 ? 'text-danger' : 'text-text-main'}`}>{item.stock}</td>
-                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">
-                                        {item.has_gst ? 
-                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-info/10 text-info">Yes</span> : 
-                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-500/10 text-gray-400">No</span>
+                                    <td className="px-4 py-4 whitespace-nowrap">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-medium text-text-main">{item.name}</span>
+                                            {item.has_gst && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
+                                            {item.is_bundle && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary/10 text-primary">Bundle</span>}
+                                        </div>
+                                    </td>
+                                    <td className={`px-4 py-4 whitespace-nowrap text-sm font-semibold ${item.stock < 10 ? 'text-danger' : 'text-text-main'}`}>
+                                        <div>
+                                            <span>{item.stock} units</span>
+                                            {canBeBundled && (
+                                                 <span className="block text-xs text-text-muted font-normal">
+                                                    ({fullBundles} bundles + {remainingUnits} loose)
+                                                </span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-text-muted">
+                                        {item.is_bundle 
+                                            ? `₹${item.price.toFixed(2)} / ₹${item.bundle_price?.toFixed(2)}`
+                                            : `₹${item.price.toFixed(2)}`
                                         }
                                     </td>
-                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">₹{item.price.toFixed(2)}</td>
-                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">₹{item.cost.toFixed(2)}</td>
-                                    <td className="hidden md:table-cell px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">{formatShortDateTime(item.created_at)}</td>
-                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-sm text-text-muted">{formatShortDateTime(item.updated_at)}</td>
-                                    <td className="px-2 md:px-3 lg:px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-text-muted">₹{item.cost.toFixed(2)}</td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div className="flex justify-end space-x-2">
                                             <button onClick={() => handleOpenModal(item)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-surface-hover transition-colors"><EditIcon /></button>
                                             <button onClick={() => openDeleteConfirm(item)} className="text-danger hover:opacity-80 p-1 rounded-full hover:bg-surface-hover transition-colors"><DeleteIcon /></button>
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 </div>

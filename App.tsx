@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Page, Sale, InventoryItem, Transaction } from './types';
+import { Page, Sale, InventoryItem, Transaction, CartItemForTransaction } from './types';
 import { useShopData } from './hooks/useShopData';
 import { useAuth } from './AuthContext';
 import { DashboardIcon, SalesIcon, InventoryIcon, InsightsIcon, MenuIcon, CloseIcon } from './components/Icons';
@@ -11,14 +11,12 @@ import LoginScreen from './components/LoginScreen';
 import UserMenu from './components/UserMenu';
 import { FilterProvider } from './FilterContext';
 
-type CartItem = Omit<Sale, 'id' | 'date' | 'user_id' | 'paymentMethod' | 'transaction_id'>;
-
 export const ShopContext = React.createContext<{
   sales: Sale[] | null;
   transactions: Transaction[] | null;
   inventory: InventoryItem[] | null;
-  addTransaction: (items: CartItem[], paymentMethod: 'Online' | 'Offline') => Promise<void>;
-  updateSale: (updatedSale: Sale) => void; // Note: For single-item edits, multi-item edit is complex.
+  addTransaction: (items: CartItemForTransaction[], paymentMethod: 'Online' | 'Offline') => Promise<void>;
+  updateSale: (updatedSale: Sale) => void;
   deleteTransaction: (transactionId: string) => void;
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<InventoryItem | null>;
   updateInventoryItem: (item: InventoryItem) => void;

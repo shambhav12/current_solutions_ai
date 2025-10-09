@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Sale, InventoryItem, Transaction } from '../types';
+import { Sale, InventoryItem, Transaction, CartItemForTransaction } from '../types';
 import { useAuth } from '../AuthContext';
 import { supabase } from '../services/supabaseClient';
-
-type CartItem = Omit<Sale, 'id' | 'date' | 'user_id' | 'paymentMethod' | 'transaction_id'>;
 
 export const useShopData = () => {
   const { user, isLoading: isAuthLoading } = useAuth();
@@ -32,32 +30,29 @@ export const useShopData = () => {
       if (transactionsError) throw transactionsError;
       if (salesError) throw salesError;
 
-      // Fix: Explicitly type the Map to ensure values are treated as InventoryItem.
       const inventoryMap = new Map<string, InventoryItem>(inventoryData.map(item => [item.id, item]));
 
-      // Group sales by transaction_id for efficient lookup
       const salesByTransactionId = new Map<string, Sale[]>();
       salesData.forEach(sale => {
         const saleForState: Sale = {
             id: sale.id,
             user_id: sale.user_id,
             inventoryItemId: sale.inventoryItemId,
-            // Use the saved productName, fall back to inventory map if it doesn't exist (for older records)
             productName: sale.productName || inventoryMap.get(sale.inventoryItemId)?.name || 'Unknown Product',
             quantity: sale.quantity,
             totalPrice: sale.totalPrice,
-            date: sale.date, // This will be overwritten by transaction date below
-            paymentMethod: sale.payment_method, // Overwritten too
+            date: sale.date,
+            paymentMethod: sale.payment_method,
             has_gst: sale.has_gst,
             itemCostAtSale: sale.item_cost_at_sale,
             transaction_id: sale.transaction_id,
+            sale_type: sale.sale_type,
         };
         const items = salesByTransactionId.get(sale.transaction_id) || [];
         items.push(saleForState);
         salesByTransactionId.set(sale.transaction_id, items);
       });
 
-      // Construct transaction objects with their sale items
       const formattedTransactions: Transaction[] = transactionsData.map(t => ({
         id: t.id,
         user_id: t.user_id,
@@ -66,23 +61,21 @@ export const useShopData = () => {
         date: t.date,
         items: (salesByTransactionId.get(t.id) || []).map(item => ({
             ...item,
-            date: t.date, // Ensure item date matches transaction date
-            paymentMethod: t.payment_method, // Ensure item payment method matches
+            date: t.date,
+            paymentMethod: t.payment_method,
         })),
       })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       
       const flatSalesFromTransactions = formattedTransactions.flatMap(t => t.items);
 
-      // Sort inventory by most recently updated
       inventoryData.sort((a, b) => 
         new Date(b.updated_at || b.created_at).getTime() - 
         new Date(a.updated_at || a.created_at).getTime()
       );
 
-      // Update application state
       setInventory(inventoryData ?? []);
       setTransactions(formattedTransactions ?? []);
-      setSales(flatSalesFromTransactions ?? []); // Keep flat sales for dashboard/insights
+      setSales(flatSalesFromTransactions ?? []);
 
     } catch (error) {
       if (!isCancelled) {
@@ -117,7 +110,7 @@ export const useShopData = () => {
   // --- actions ---
 
   const addTransaction = useCallback(
-    async (items: CartItem[], paymentMethod: 'Online' | 'Offline') => {
+    async (items: CartItemForTransaction[], paymentMethod: 'Online' | 'Offline') => {
       if (!user || items.length === 0) {
         console.error('[addTransaction] Aborted: user not available or no items.');
         return;
@@ -126,7 +119,6 @@ export const useShopData = () => {
       try {
         const grandTotal = items.reduce((acc, item) => acc + item.totalPrice, 0);
   
-        // 1. Create parent transaction
         const { data: newTransaction, error: transactionError } = await supabase
           .from('transactions')
           .insert({
@@ -140,7 +132,6 @@ export const useShopData = () => {
   
         if (transactionError || !newTransaction) throw transactionError || new Error('Failed to create transaction.');
   
-        // 2. Prepare sales payloads and inventory updates
         const salePayloads = [];
         const inventoryUpdates = new Map<string, number>();
   
@@ -152,9 +143,12 @@ export const useShopData = () => {
             .single();
           
           if (fetchError || !currentItem) throw fetchError || new Error(`Item ${item.productName} not found.`);
-          if (currentItem.stock < item.quantity) throw new Error(`Not enough stock for ${item.productName}.`);
+          
+          const unitsToDeduct = item.sale_type === 'bundle' ? item.quantity * (item.items_per_bundle || 1) : item.quantity;
+
+          if (currentItem.stock < unitsToDeduct) throw new Error(`Not enough stock for ${item.productName}.`);
   
-          inventoryUpdates.set(item.inventoryItemId, currentItem.stock - item.quantity);
+          inventoryUpdates.set(item.inventoryItemId, currentItem.stock - unitsToDeduct);
           
           salePayloads.push({
             inventoryItemId: item.inventoryItemId,
@@ -163,28 +157,24 @@ export const useShopData = () => {
             totalPrice: item.totalPrice,
             user_id: user.id,
             transaction_id: newTransaction.id,
-            item_cost_at_sale: currentItem.cost,
+            item_cost_at_sale: currentItem.cost * unitsToDeduct, // Total cost for units sold
             has_gst: currentItem.has_gst,
-            // CRITICAL FIX: Add date and payment_method to satisfy database NOT NULL constraints.
             date: newTransaction.date,
             payment_method: newTransaction.payment_method,
+            sale_type: item.sale_type,
           });
         }
   
-        // 3. Update all inventory items
         for (const [id, stock] of inventoryUpdates.entries()) {
              const { error: stockError } = await supabase.from('inventory').update({ stock }).eq('id', id);
              if (stockError) throw stockError;
         }
   
-        // 4. Insert sales and get the created records back
         const { data: newSales, error: salesError } = await supabase.from('sales').insert(salePayloads).select();
-        if (salesError) throw salesError; // TODO: Rollback logic
+        if (salesError) throw salesError;
   
-        // 5. CRITICAL FIX: Update local state deterministically instead of refetching.
         const inventoryMap = new Map(inventory?.map(i => [i.id, i]));
         
-        // Update inventory state
         setInventory(prev => {
             if (!prev) return [];
             return prev.map(item => {
@@ -195,12 +185,11 @@ export const useShopData = () => {
             });
         });
 
-        // Construct new UI-ready Sale objects with productName
         const newUiSales: Sale[] = newSales.map(s => ({
             id: s.id,
             user_id: s.user_id,
             inventoryItemId: s.inventoryItemId,
-            productName: s.productName, // The name is now saved in the record
+            productName: s.productName,
             quantity: s.quantity,
             totalPrice: s.totalPrice,
             paymentMethod: newTransaction.payment_method as 'Online' | 'Offline',
@@ -208,9 +197,9 @@ export const useShopData = () => {
             itemCostAtSale: s.item_cost_at_sale,
             has_gst: s.has_gst,
             transaction_id: s.transaction_id,
+            sale_type: s.sale_type,
         }));
         
-        // Construct new UI-ready Transaction object
         const newUiTransaction: Transaction = {
             id: newTransaction.id,
             user_id: newTransaction.user_id,
@@ -220,7 +209,6 @@ export const useShopData = () => {
             items: newUiSales,
         };
   
-        // Update transactions and flat sales state
         setTransactions(prev => [newUiTransaction, ...(prev || [])]);
         setSales(prev => [...newUiSales, ...(prev || [])]);
   
@@ -234,10 +222,7 @@ export const useShopData = () => {
   
   const updateSale = useCallback(
     async (updatedSale: Sale) => {
-      // NOTE: This function is now only for single-item sales and is not exposed in the multi-item UI.
-      // A full multi-item transaction editor would be a much larger feature.
-      if (!user || !inventory || !sales) return;
-      // ... existing logic remains ...
+      // This function is deprecated in the multi-item world.
     },
     [user, sales, inventory]
   );
@@ -246,10 +231,8 @@ export const useShopData = () => {
     async (transactionId: string) => {
         if (!user || !inventory || !sales) return;
 
-        const itemsToRestore = sales.filter(s => s.transaction_id === transactionId);
-        if (!itemsToRestore.length) {
-            console.warn(`[deleteTransaction] No sale items for transaction ID: ${transactionId}`);
-        }
+        const transactionToDelete = transactions?.find(t => t.id === transactionId);
+        if (!transactionToDelete) return;
 
         const { error: deleteError } = await supabase.from('transactions').delete().eq('id', transactionId);
 
@@ -259,12 +242,20 @@ export const useShopData = () => {
             return;
         }
 
-        // Apply stock restorations
         const stockRestorationMap = new Map<string, number>();
-        itemsToRestore.forEach(saleItem => {
-            const currentChange = stockRestorationMap.get(saleItem.inventoryItemId) || 0;
-            stockRestorationMap.set(saleItem.inventoryItemId, currentChange + saleItem.quantity);
-        });
+        const inventoryMap = new Map(inventory.map(i => [i.id, i]));
+
+        for (const saleItem of transactionToDelete.items) {
+            const inventoryItem = inventoryMap.get(saleItem.inventoryItemId);
+            if (inventoryItem) {
+                const unitsToRestore = saleItem.sale_type === 'bundle'
+                    ? saleItem.quantity * (inventoryItem.items_per_bundle || 1)
+                    : saleItem.quantity;
+                
+                const currentChange = stockRestorationMap.get(saleItem.inventoryItemId) || 0;
+                stockRestorationMap.set(saleItem.inventoryItemId, currentChange + unitsToRestore);
+            }
+        }
 
         for (const [itemId, quantityToRestore] of stockRestorationMap.entries()) {
             const currentItem = inventory.find(i => i.id === itemId);
@@ -277,7 +268,6 @@ export const useShopData = () => {
             }
         }
         
-        // CRITICAL FIX: Update local state deterministically instead of refetching.
         setTransactions(prev => prev ? prev.filter(t => t.id !== transactionId) : []);
         setSales(prev => prev ? prev.filter(s => s.transaction_id !== transactionId) : []);
         setInventory(prev => {
@@ -290,7 +280,7 @@ export const useShopData = () => {
             });
         });
     },
-    [user, inventory, sales]
+    [user, inventory, sales, transactions]
 );
 
 
@@ -325,6 +315,9 @@ export const useShopData = () => {
           price: updatedItem.price,
           cost: updatedItem.cost,
           has_gst: updatedItem.has_gst,
+          is_bundle: updatedItem.is_bundle,
+          bundle_price: updatedItem.is_bundle ? updatedItem.bundle_price : null,
+          items_per_bundle: updatedItem.is_bundle ? updatedItem.items_per_bundle : null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', updatedItem.id)
@@ -345,16 +338,10 @@ export const useShopData = () => {
   const deleteInventoryItem = useCallback(
     async (itemId: string) => {
       if (!user) return;
-
-      // Deleting an inventory item will cascade delete associated sales,
-      // which will in turn leave orphaned transaction records.
-      // This is complex to clean up perfectly without server-side logic.
-      // The current approach deletes the item and its sales records via CASCADE.
       const { error } = await supabase.from('inventory').delete().eq('id', itemId);
       if (error) {
         console.error('Error deleting inventory item:', error);
       } else {
-        // Refetch all data to ensure consistency after cascading deletes.
         if(user) await fetchData(user.id);
       }
     },
