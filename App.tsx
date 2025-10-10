@@ -1,8 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Page, Sale, InventoryItem, Transaction, CartItemForTransaction } from './types';
+import { Page, Sale, InventoryItem, Transaction } from './types';
 import { useShopData } from './hooks/useShopData';
 import { useAuth } from './AuthContext';
-import { DashboardIcon, SalesIcon, InventoryIcon, InsightsIcon, MenuIcon, CloseIcon } from './components/Icons';
+import { DashboardIcon, SalesIcon, InventoryIcon, InsightsIcon, MenuIcon, CloseIcon, ReturnIcon } from './components/Icons';
 import Dashboard from './components/Dashboard';
 import Sales from './components/Sales';
 import Inventory from './components/Inventory';
@@ -10,14 +10,17 @@ import Insights from './components/Insights';
 import LoginScreen from './components/LoginScreen';
 import UserMenu from './components/UserMenu';
 import { FilterProvider } from './FilterContext';
+import Returns from './components/Returns';
 
 export const ShopContext = React.createContext<{
   sales: Sale[] | null;
   transactions: Transaction[] | null;
   inventory: InventoryItem[] | null;
-  addTransaction: (items: CartItemForTransaction[], paymentMethod: 'Online' | 'Offline') => Promise<void>;
+  addTransaction: (items: any, paymentMethod: 'Online' | 'Offline') => Promise<void>;
   updateSale: (updatedSale: Sale) => void;
   deleteTransaction: (transactionId: string) => void;
+  processReturn: (saleId: string) => Promise<void>;
+  processStandaloneReturn: (itemToReturn: InventoryItem, quantity: number, refundAmount: number) => Promise<void>;
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<InventoryItem | null>;
   updateInventoryItem: (item: InventoryItem) => void;
   deleteInventoryItem: (itemId: string) => void;
@@ -28,6 +31,8 @@ export const ShopContext = React.createContext<{
   addTransaction: async () => {},
   updateSale: () => {},
   deleteTransaction: () => {},
+  processReturn: async () => {},
+  processStandaloneReturn: async () => {},
   addInventoryItem: async () => null,
   updateInventoryItem: () => {},
   deleteInventoryItem: () => {},
@@ -44,6 +49,8 @@ const App: React.FC = () => {
     addTransaction,
     updateSale,
     deleteTransaction,
+    processReturn,
+    processStandaloneReturn,
     addInventoryItem,
     updateInventoryItem,
     deleteInventoryItem,
@@ -74,11 +81,13 @@ const App: React.FC = () => {
       addTransaction,
       updateSale,
       deleteTransaction,
+      processReturn,
+      processStandaloneReturn,
       addInventoryItem,
       updateInventoryItem,
       deleteInventoryItem,
     }),
-    [sales, transactions, inventory, addTransaction, updateSale, deleteTransaction, addInventoryItem, updateInventoryItem, deleteInventoryItem]
+    [sales, transactions, inventory, addTransaction, updateSale, deleteTransaction, processReturn, processStandaloneReturn, addInventoryItem, updateInventoryItem, deleteInventoryItem]
   );
 
   const renderPage = useCallback(() => {
@@ -87,6 +96,8 @@ const App: React.FC = () => {
         return <Dashboard />;
       case Page.Sales:
         return <Sales />;
+      case Page.Returns:
+        return <Returns />;
       case Page.Inventory:
         return <Inventory />;
       case Page.Insights:
@@ -132,6 +143,7 @@ const App: React.FC = () => {
                 {[
                   { page: Page.Dashboard, label: 'Dashboard', icon: <DashboardIcon /> },
                   { page: Page.Sales, label: 'Sales', icon: <SalesIcon /> },
+                  { page: Page.Returns, label: 'Returns', icon: <ReturnIcon /> },
                   { page: Page.Inventory, label: 'Inventory', icon: <InventoryIcon /> },
                   { page: Page.Insights, label: 'AI Insights', icon: <InsightsIcon /> },
                 ].map((item) => (

@@ -1,10 +1,10 @@
-import React, { useContext, useMemo } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
 import { ShopContext } from '../App';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { useFilters } from '../FilterContext';
 import DateFilterComponent from './ui/DateFilter';
 import { Sale } from '../types';
-import { RevenueIcon, ProfitIcon, OnlineIcon, OfflineIcon, GstIcon, GstPayableIcon } from './Icons';
+import { RevenueIcon, OnlineIcon, OfflineIcon, GstPayableIcon, ChevronDownIcon } from './Icons';
 import { StatCard } from './ui/StatCard';
 
 
@@ -45,6 +45,9 @@ const filterSalesByDate = (sales: Sale[], dateFilter: ReturnType<typeof useFilte
 const Dashboard: React.FC = () => {
     const { sales, inventory } = useContext(ShopContext);
     const { dateFilter } = useFilters();
+    const [isGstExpanded, setIsGstExpanded] = useState(false);
+    const [isRevenueExpanded, setIsRevenueExpanded] = useState(false);
+
 
     // Guard against rendering until data is loaded
     if (!sales || !inventory) {
@@ -53,70 +56,76 @@ const Dashboard: React.FC = () => {
 
     const filteredSales = useMemo(() => filterSalesByDate(sales, dateFilter), [sales, dateFilter]);
     
-    const inventoryCostMap = useMemo(() => {
-        return new Map(inventory.map(item => [item.id, item.cost]));
-    }, [inventory]);
-
+    // This is the single source of truth for all calculations.
+    // It correctly excludes items returned via the old method (status: 'returned')
+    // and correctly includes standalone returns (which are negative-value sales with status: 'completed').
+    const relevantSales = useMemo(() => filteredSales.filter(s => s.status !== 'returned'), [filteredSales]);
+    
     const totalRevenue = useMemo(() =>
-        filteredSales.reduce((acc, sale) => acc + sale.totalPrice, 0),
-        [filteredSales]
+        relevantSales.reduce((acc, sale) => acc + sale.totalPrice, 0),
+        [relevantSales]
     );
 
     const totalProfit = useMemo(() =>
-        filteredSales.reduce((acc, sale) => {
-            const itemCost = sale.itemCostAtSale ?? inventoryCostMap.get(sale.inventoryItemId) ?? 0;
-            const saleProfit = sale.totalPrice - (itemCost * sale.quantity);
+        relevantSales.reduce((acc, sale) => {
+            const saleProfit = sale.totalPrice - (sale.itemCostAtSale ?? 0);
             return acc + saleProfit;
         }, 0),
-        [filteredSales, inventoryCostMap]
+        [relevantSales]
+    );
+    
+    const profitMargin = useMemo(() =>
+        totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0,
+        [totalRevenue, totalProfit]
     );
 
     const onlineRevenue = useMemo(() =>
-        filteredSales.reduce((acc, sale) => (sale.paymentMethod === 'Online' ? acc + sale.totalPrice : acc), 0),
-        [filteredSales]
+        relevantSales.reduce((acc, sale) => (sale.paymentMethod === 'Online' ? acc + sale.totalPrice : acc), 0),
+        [relevantSales]
     );
 
     const offlineRevenue = useMemo(() =>
-        filteredSales.reduce((acc, sale) => (sale.paymentMethod === 'Offline' ? acc + sale.totalPrice : acc), 0),
-        [filteredSales]
+        relevantSales.reduce((acc, sale) => (sale.paymentMethod === 'Offline' ? acc + sale.totalPrice : acc), 0),
+        [relevantSales]
     );
 
     const totalGstSales = useMemo(() =>
-        filteredSales.reduce((acc, sale) => (sale.has_gst ? acc + sale.totalPrice : acc), 0),
-        [filteredSales]
+        relevantSales.reduce((acc, sale) => (sale.has_gst ? acc + sale.totalPrice : acc), 0),
+        [relevantSales]
     );
 
     const outputGst = useMemo(() =>
-        filteredSales.reduce((acc, sale) => {
+        relevantSales.reduce((acc, sale) => {
             if (sale.has_gst) {
-                // Correctly assuming totalPrice is the pre-tax value.
-                // GST Amount = Total Price * 0.18
+                // For a return (negative price), this correctly calculates a negative GST (credit)
                 const gstAmount = sale.totalPrice * 0.18;
                 return acc + gstAmount;
             }
             return acc;
         }, 0),
-        [filteredSales]
+        [relevantSales]
     );
 
     const inputGstOnSoldItems = useMemo(() =>
-        filteredSales.reduce((acc, sale) => {
+        relevantSales.reduce((acc, sale) => {
             if (sale.has_gst) {
-                // Assumes item.cost in inventory is pre-tax
-                const itemCost = sale.itemCostAtSale ?? inventoryCostMap.get(sale.inventoryItemId) ?? 0;
-                const inputGstForItem = (itemCost * sale.quantity) * 0.18;
+                // For a return, we credit the input GST as well.
+                // We use Math.sign to handle negative totalPrice correctly.
+                const sign = Math.sign(sale.totalPrice);
+                const totalItemCost = (sale.itemCostAtSale ?? 0) * sign;
+                const inputGstForItem = totalItemCost * 0.18;
                 return acc + inputGstForItem;
             }
             return acc;
         }, 0),
-        [filteredSales, inventoryCostMap]
+        [relevantSales]
     );
 
     const netGstPayable = useMemo(() => outputGst - inputGstOnSoldItems, [outputGst, inputGstOnSoldItems]);
 
     const salesOverTime = useMemo(() => {
         const salesByDay: { [key: string]: number } = {};
-        filteredSales.forEach(sale => {
+        relevantSales.forEach(sale => {
             const date = new Date(sale.date).toLocaleDateString();
             if (!salesByDay[date]) {
                 salesByDay[date] = 0;
@@ -127,18 +136,20 @@ const Dashboard: React.FC = () => {
             date,
             'Total Sales': salesByDay[date],
         })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [filteredSales]);
+    }, [relevantSales]);
 
     const topSellingItems = useMemo(() => {
         const itemSales: { [key: string]: { name: string; quantity: number } } = {};
-        filteredSales.forEach(sale => {
+        // We only want to see positive sales here, not returns
+        const positiveSales = relevantSales.filter(s => s.totalPrice > 0);
+        positiveSales.forEach(sale => {
             if (!itemSales[sale.inventoryItemId]) {
                 itemSales[sale.inventoryItemId] = { name: sale.productName, quantity: 0 };
             }
             itemSales[sale.inventoryItemId].quantity += sale.quantity;
         });
         return Object.values(itemSales).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
-    }, [filteredSales]);
+    }, [relevantSales]);
 
     return (
         <div className="space-y-8">
@@ -146,15 +157,69 @@ const Dashboard: React.FC = () => {
                 <h2 className="text-3xl font-bold text-text-main">Dashboard</h2>
                 <DateFilterComponent />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                <StatCard title="Total Revenue" value={`₹${totalRevenue.toFixed(2)}`} subtext={dateFilter.label} icon={<RevenueIcon />} />
-                <StatCard title="Total Profit" value={`₹${totalProfit.toFixed(2)}`} subtext={dateFilter.label} icon={<ProfitIcon />} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                
+                {/* Expandable Revenue & Profit Card */}
+                <div className="bg-surface rounded-lg shadow-lg border border-border transition-all duration-300 hover:shadow-primary/20 col-span-1 sm:col-span-2 lg:col-span-1">
+                    <div className="flex items-center space-x-4 cursor-pointer p-6" onClick={() => setIsRevenueExpanded(!isRevenueExpanded)}>
+                        <div className="p-3 rounded-full bg-primary/10 text-primary">
+                            <RevenueIcon />
+                        </div>
+                        <div className="flex-grow">
+                            <h3 className="text-sm font-medium text-text-muted">Total Revenue ({dateFilter.label})</h3>
+                            <p className="text-2xl font-bold text-text-main mt-1">₹{totalRevenue.toFixed(2)}</p>
+                        </div>
+                        <ChevronDownIcon className={`transform transition-transform duration-300 ${isRevenueExpanded ? 'rotate-180' : ''}`} />
+                    </div>
+                     <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isRevenueExpanded ? 'max-h-40' : 'max-h-0'}`}>
+                         <div className="px-6 pb-6 pt-4 border-t border-border space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-text-muted">Total Profit:</span>
+                                <span className="font-semibold text-success">₹{totalProfit.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-text-muted">Profit Margin:</span>
+                                <span className="font-semibold text-success">{profitMargin.toFixed(2)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <StatCard title="Online Revenue" value={`₹${onlineRevenue.toFixed(2)}`} subtext="Online payments" icon={<OnlineIcon />}/>
                 <StatCard title="Offline Revenue" value={`₹${offlineRevenue.toFixed(2)}`} subtext="Cash payments" icon={<OfflineIcon />}/>
-                <StatCard title="Total GST Sales" value={`₹${totalGstSales.toFixed(2)}`} subtext="Revenue from GST items" icon={<GstIcon />} />
-                <StatCard title="Output GST (Collected)" value={`₹${outputGst.toFixed(2)}`} subtext="From sales @ 18%" icon={<GstIcon />} />
-                <StatCard title="Input GST (Credit)" value={`₹${inputGstOnSoldItems.toFixed(2)}`} subtext="On cost of goods sold" icon={<GstIcon />} />
-                <StatCard title="Net GST Payable" value={`₹${netGstPayable.toFixed(2)}`} subtext="Output - Input GST" icon={<GstPayableIcon />} />
+
+                {/* Expandable GST Card */}
+                <div className="bg-surface rounded-lg shadow-lg border border-border transition-all duration-300 hover:shadow-primary/20">
+                    <div className="flex items-center space-x-4 cursor-pointer p-6" onClick={() => setIsGstExpanded(!isGstExpanded)}>
+                        <div className="p-3 rounded-full bg-primary/10 text-primary">
+                            <GstPayableIcon />
+                        </div>
+                        <div className="flex-grow">
+                            <h3 className="text-sm font-medium text-text-muted">GST Details</h3>
+                            <p className="text-2xl font-bold text-text-main mt-1">₹{netGstPayable.toFixed(2)}</p>
+                             <p className="text-xs text-text-muted mt-1">Net GST Payable</p>
+                        </div>
+                        <ChevronDownIcon className={`transform transition-transform duration-300 ${isGstExpanded ? 'rotate-180' : ''}`} />
+                    </div>
+
+                    <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isGstExpanded ? 'max-h-40' : 'max-h-0'}`}>
+                         <div className="px-6 pb-6 pt-4 border-t border-border space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-text-muted">Total GST Sales:</span>
+                                <span className="font-semibold text-text-main">₹{totalGstSales.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-text-muted">Output GST (Collected):</span>
+                                <span className="font-semibold text-text-main">₹{outputGst.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-text-muted">Input GST (Credit):</span>
+                                <span className="font-semibold text-text-main">₹{inputGstOnSoldItems.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

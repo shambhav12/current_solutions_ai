@@ -3,7 +3,7 @@ import { ShopContext } from '../App';
 import { Sale, Transaction, InventoryItem, CartItemForTransaction } from '../types';
 import Modal from './ui/Modal';
 import ConfirmationModal from './ui/ConfirmationModal';
-import { PlusIcon, DeleteIcon, EditIcon } from './Icons';
+import { PlusIcon, DeleteIcon, EditIcon, ReturnIcon } from './Icons';
 import { useFilters } from '../FilterContext';
 import DateFilterComponent from './ui/DateFilter';
 import { useDebounce } from '../hooks/useDebounce';
@@ -18,6 +18,7 @@ interface CartItem {
     costPerUnit: number;
     sale_type: 'loose' | 'bundle';
     items_per_bundle: number;
+    is_bundle_item: boolean;
 }
 
 const SalesForm: React.FC<{
@@ -62,11 +63,12 @@ const SalesForm: React.FC<{
 
     useEffect(() => {
         if (transactionToEdit && inventory) {
+             const editableItems = transactionToEdit.items.filter(item => item.status !== 'returned');
             const inventoryMap = new Map(inventory.map(i => [i.id, i]));
             
             // Calculate how many units were sold in this transaction for each item
             const stockRestorationMap = new Map<string, number>();
-            transactionToEdit.items.forEach(saleItem => {
+            editableItems.forEach(saleItem => {
                 const invItem = inventoryMap.get(saleItem.inventoryItemId);
                 if(invItem){
                     const unitsSold = saleItem.sale_type === 'bundle' 
@@ -77,7 +79,7 @@ const SalesForm: React.FC<{
                 }
             });
 
-            const cartItems: CartItem[] = transactionToEdit.items.map(saleItem => {
+            const cartItems: CartItem[] = editableItems.map(saleItem => {
                 const invItem = inventoryMap.get(saleItem.inventoryItemId);
                 if (!invItem) return null;
 
@@ -94,6 +96,7 @@ const SalesForm: React.FC<{
                     costPerUnit: invItem.cost,
                     sale_type: saleItem.sale_type || 'loose',
                     items_per_bundle: invItem.items_per_bundle || 1,
+                    is_bundle_item: invItem.is_bundle || false,
                 };
             }).filter((item): item is CartItem => item !== null);
 
@@ -198,6 +201,7 @@ const SalesForm: React.FC<{
                 costPerUnit: newInventoryItem.cost,
                 sale_type: 'loose',
                 items_per_bundle: 1,
+                is_bundle_item: newInventoryItem.is_bundle || false,
             };
         } else if (currentItem) {
             const costOfSaleUnit = saleType === 'bundle' ? (currentItem.cost * (currentItem.items_per_bundle || 1)) : currentItem.cost;
@@ -217,6 +221,7 @@ const SalesForm: React.FC<{
                 costPerUnit: currentItem.cost,
                 sale_type: saleType,
                 items_per_bundle: currentItem.items_per_bundle || 1,
+                is_bundle_item: currentItem.is_bundle || false,
             };
         } else {
              alert('Please select a product to add.');
@@ -305,8 +310,9 @@ const SalesForm: React.FC<{
 
 
     return (
-         <form onSubmit={handleSubmitTransaction} className="space-y-6">
-            <div className="p-4 border border-border rounded-lg space-y-4">
+         <form onSubmit={handleSubmitTransaction} className="flex flex-col max-h-[80vh]">
+            {/* TOP SECTION */}
+            <div className="p-4 border border-border rounded-lg space-y-4 flex-shrink-0">
                  <div className="relative" ref={searchRef}>
                     <label className="block text-sm font-medium text-text-muted">Product</label>
                     <input
@@ -355,7 +361,7 @@ const SalesForm: React.FC<{
                                 <input type="number" value={newItemStock} onChange={e => setNewItemStock(e.target.value)} min="1" step="1" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-text-muted">Loose Price (₹)</label>
+                                <label className="block text-xs font-medium text-text-muted">{newItemIsBundle ? 'Loose Price (₹)' : 'Selling Price (₹)'}</label>
                                 <input type="number" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
                             </div>
                             <div>
@@ -405,19 +411,22 @@ const SalesForm: React.FC<{
                  </div>
             </div>
 
-            <div className="space-y-3">
+            {/* MIDDLE SECTION - CART */}
+            <div className="space-y-3 my-4 flex-grow overflow-y-auto">
                 <h3 className="text-lg font-medium text-text-main">Current Sale Items</h3>
                 {cart.length === 0 ? (
                     <p className="text-sm text-text-muted text-center py-4 bg-background rounded-lg border border-border">No items added yet.</p>
                 ) : (
-                    <div className="max-h-60 overflow-y-auto space-y-2 pr-2">
+                    <div className="space-y-2 pr-2">
                         {cart.map((item, index) => (
                            <div key={`${item.inventoryItemId}-${index}`} className="grid grid-cols-12 gap-2 items-center bg-background p-3 rounded-md border border-border">
                                 <div className="col-span-12 sm:col-span-4">
                                     <p className="font-medium text-text-main truncate">{item.productName}</p>
-                                    <p className="text-xs text-text-muted">
-                                        {item.sale_type === 'bundle' ? `Bundle (${item.items_per_bundle} units)` : 'Loose'}
-                                    </p>
+                                    {item.is_bundle_item && (
+                                        <p className="text-xs text-text-muted">
+                                            {item.sale_type === 'bundle' ? `Bundle (${item.items_per_bundle} units)` : 'Loose'}
+                                        </p>
+                                    )}
                                 </div>
                                 
                                 <div className="col-span-4 sm:col-span-2">
@@ -448,7 +457,7 @@ const SalesForm: React.FC<{
                                 </div>
 
                                 <div className="col-span-4 sm:col-span-4 flex items-center justify-end gap-2">
-                                    <p className="font-semibold text-text-main text-right w-full">
+                                    <p className="font-semibold text-text-main text-right">
                                         ₹{item.totalPrice.toFixed(2)}
                                     </p>
                                     <button type="button" onClick={() => handleRemoveFromCart(index)} className="text-danger p-1 rounded-full hover:bg-surface-hover flex-shrink-0">
@@ -461,7 +470,8 @@ const SalesForm: React.FC<{
                 )}
             </div>
 
-            <div className="border-t border-border pt-4 space-y-4">
+            {/* BOTTOM SECTION */}
+            <div className="border-t border-border pt-4 space-y-4 flex-shrink-0">
                 <div className="flex justify-between items-center text-xl font-bold">
                     <span className="text-text-main">Grand Total:</span>
                     <span className="text-success">₹{grandTotal.toFixed(2)}</span>
@@ -479,12 +489,11 @@ const SalesForm: React.FC<{
                         </label>
                     </div>
                 </div>
-            </div>
-
-             <div className="flex justify-end pt-4">
-                <button type="submit" className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors">
-                    {transactionToEdit ? 'Update Sale' : 'Submit Sale'}
-                </button>
+                 <div className="flex justify-end pt-2">
+                    <button type="submit" className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors">
+                        {transactionToEdit ? 'Update Sale' : 'Submit Sale'}
+                    </button>
+                </div>
             </div>
         </form>
     );
@@ -520,11 +529,19 @@ const GstFilterComponent: React.FC<{ filter: GstFilter, setFilter: (filter: GstF
     );
 };
 
-const TransactionCard: React.FC<{ transaction: Transaction; onDelete: () => void; onEdit: () => void; }> = ({ transaction, onEdit, onDelete }) => (
+const TransactionCard: React.FC<{ transaction: Transaction; onDelete: () => void; onEdit: () => void; onReturn: (item: Sale) => void; inventoryMap: Map<string, InventoryItem> }> = ({ transaction, onEdit, onDelete, onReturn, inventoryMap }) => {
+    const effectiveTotal = useMemo(() => 
+        transaction.items.filter(i => i.status !== 'returned').reduce((acc, item) => acc + item.totalPrice, 0),
+        [transaction.items]
+    );
+    const hasReturns = useMemo(() => transaction.items.some(i => i.status === 'returned'), [transaction.items]);
+
+    return (
     <div className="bg-surface p-4 rounded-lg border border-border flex flex-col space-y-3">
         <div className="flex justify-between items-start">
              <div className="flex-1 pr-4">
-                <h3 className="font-bold text-lg text-success">₹{transaction.total_price.toFixed(2)}</h3>
+                <h3 className="font-bold text-lg text-success">₹{effectiveTotal.toFixed(2)}</h3>
+                {hasReturns && <p className="text-xs text-text-muted">Original: <span className="line-through">₹{transaction.total_price.toFixed(2)}</span></p>}
                 <p className="text-sm text-text-muted mt-1">
                     {new Date(transaction.date).toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit' })}
                 </p>
@@ -549,32 +566,51 @@ const TransactionCard: React.FC<{ transaction: Transaction; onDelete: () => void
         </div>
         
         <div className="pt-2 border-t border-border/50 space-y-2">
-            {transaction.items.map(item => (
-                 <div key={item.id} className="flex justify-between items-center text-sm">
-                    <div className="text-text-main">
+            {transaction.items.map(item => {
+                const invItem = inventoryMap.get(item.inventoryItemId);
+                const isBundleItem = invItem?.is_bundle || false;
+                return (
+                 <div key={item.id} className="flex justify-between items-center text-sm group">
+                    <div className={`text-text-main ${item.status === 'returned' ? 'line-through text-text-muted' : ''}`}>
                         {item.productName} 
-                        <span className="text-text-muted ml-2"> (x{item.quantity} {item.sale_type === 'bundle' ? 'bundles' : ''})</span>
+                        <span className="text-text-muted ml-2"> (x{item.quantity}{isBundleItem ? (item.sale_type === 'bundle' ? ' bundles' : ' loose') : ''})</span>
                         {item.has_gst && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
+                         {item.status === 'returned' && <span className="ml-2 px-1.5 py-0.5 text-xs font-semibold rounded-full bg-warning/10 text-warning">Returned</span>}
                     </div>
-                    <span className="text-text-muted">₹{item.totalPrice.toFixed(2)}</span>
+                     <div className="flex items-center gap-2">
+                        <span className={`text-text-muted ${item.status === 'returned' ? 'line-through' : ''}`}>₹{item.totalPrice.toFixed(2)}</span>
+                        {item.status !== 'returned' && (
+                            <button onClick={() => onReturn(item)} className="text-info hover:opacity-80 p-1 rounded-full hover:bg-surface-hover transition-colors opacity-0 group-hover:opacity-100">
+                                <ReturnIcon />
+                            </button>
+                        )}
+                    </div>
                  </div>
-            ))}
+                )
+            })}
         </div>
     </div>
-);
+    )
+};
 
 
 const Sales: React.FC = () => {
-    const { transactions, deleteTransaction, addTransaction } = useContext(ShopContext);
+    const { transactions, deleteTransaction, addTransaction, processReturn, inventory } = useContext(ShopContext);
     const { dateFilter } = useFilters();
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+    const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
     const [transactionToDelete, setTransactionToDelete] = useState<Transaction | null>(null);
     const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+    const [saleToReturn, setSaleToReturn] = useState<Sale | null>(null);
     const [gstFilter, setGstFilter] = useState<GstFilter>('all');
     
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+    const inventoryMap = useMemo(() => {
+        if (!inventory) return new Map<string, InventoryItem>();
+        return new Map(inventory.map(i => [i.id, i]));
+    }, [inventory]);
 
     if (!transactions) {
         return null;
@@ -650,12 +686,18 @@ const Sales: React.FC = () => {
 
     const openDeleteConfirm = (transaction: Transaction) => {
         setTransactionToDelete(transaction);
-        setIsConfirmModalOpen(true);
+        setIsConfirmDeleteModalOpen(true);
     };
 
     const handleDelete = () => {
         if (transactionToDelete) {
             deleteTransaction(transactionToDelete.id);
+        }
+    };
+
+    const handleConfirmReturn = async () => {
+        if (saleToReturn) {
+            await processReturn(saleToReturn.id);
         }
     };
 
@@ -694,12 +736,25 @@ const Sales: React.FC = () => {
             </Modal>
             
             <ConfirmationModal
-                isOpen={isConfirmModalOpen}
-                onClose={() => setIsConfirmModalOpen(false)}
+                isOpen={isConfirmDeleteModalOpen}
+                onClose={() => setIsConfirmDeleteModalOpen(false)}
                 onConfirm={handleDelete}
                 title="Delete Sale Record"
+                confirmText="Confirm Delete"
+                variant="danger"
             >
                 Are you sure you want to delete this transaction from {new Date(transactionToDelete?.date || '').toLocaleDateString()}? This will restore stock for all items and cannot be undone.
+            </ConfirmationModal>
+
+            <ConfirmationModal
+                isOpen={!!saleToReturn}
+                onClose={() => setSaleToReturn(null)}
+                onConfirm={handleConfirmReturn}
+                title="Confirm Item Return"
+                confirmText="Yes, Return Item"
+                variant="warning"
+            >
+                Are you sure you want to return "{saleToReturn?.productName}" (Qty: {saleToReturn?.quantity})? This will add the item(s) back to your inventory.
             </ConfirmationModal>
 
             <div className="md:hidden space-y-4 pb-20">
@@ -710,6 +765,8 @@ const Sales: React.FC = () => {
                             transaction={t}
                             onDelete={() => openDeleteConfirm(t)}
                             onEdit={() => handleOpenModal(t)}
+                            onReturn={setSaleToReturn}
+                            inventoryMap={inventoryMap}
                         />
                     )
                 ) : (
@@ -741,17 +798,26 @@ const Sales: React.FC = () => {
                                     </td>
                                 </tr>
                             )}
-                            {filteredTransactions.map((t: Transaction) => (
+                            {filteredTransactions.map((t: Transaction) => {
+                                const effectiveTotal = t.items.filter(i => i.status !== 'returned').reduce((acc, item) => acc + item.totalPrice, 0);
+                                return (
                                 <tr key={t.id} className="hover:bg-surface-hover/50">
                                     <td className="px-4 py-4 whitespace-nowrap text-sm text-text-main">
-                                        {t.items.map(item => (
-                                            <div key={item.id} className="flex items-center gap-2">
-                                                <span>{item.productName} (x{item.quantity} {item.sale_type === 'bundle' ? 'bundles' : ''})</span>
+                                        {t.items.map(item => {
+                                            const invItem = inventoryMap.get(item.inventoryItemId);
+                                            const isBundleItem = invItem?.is_bundle || false;
+                                            return (
+                                            <div key={item.id} className={`flex items-center gap-2 ${item.status === 'returned' ? 'text-text-muted line-through' : ''}`}>
+                                                <span>{item.productName} (x{item.quantity}{isBundleItem ? (item.sale_type === 'bundle' ? ' bundles' : ' loose') : ''})</span>
                                                 {item.has_gst && <span className="px-1.5 py-0.5 text-xs font-semibold rounded-full bg-info/10 text-info">GST</span>}
+                                                {item.status === 'returned' && <span className="px-1.5 py-0.5 text-xs font-semibold rounded-full bg-warning/10 text-warning">Returned</span>}
                                             </div>
-                                        ))}
+                                        )})}
                                     </td>
-                                    <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-text-main">₹{t.total_price.toFixed(2)}</td>
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-text-main">
+                                        ₹{effectiveTotal.toFixed(2)}
+                                        {effectiveTotal < t.total_price && <span className="block text-xs text-text-muted line-through">₹{t.total_price.toFixed(2)}</span>}
+                                    </td>
                                     <td className="px-4 py-4 whitespace-nowrap text-sm text-text-muted">
                                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                                             t.payment_method === 'Online'
@@ -769,7 +835,7 @@ const Sales: React.FC = () => {
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 </div>

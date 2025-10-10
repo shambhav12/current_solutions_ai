@@ -1,6 +1,7 @@
 export enum Page {
     Dashboard = 'DASHBOARD',
     Sales = 'SALES',
+    Returns = 'RETURNS',
     Inventory = 'INVENTORY',
     Insights = 'INSIGHTS',
 }
@@ -27,6 +28,7 @@ export interface Sale {
     itemCostAtSale?: number;
     transaction_id?: string;
     sale_type?: 'loose' | 'bundle'; // New field to track sale type
+    status?: 'completed' | 'returned'; // To track returns
 }
 
 export interface InventoryItem {

@@ -47,6 +47,7 @@ export const useShopData = () => {
             itemCostAtSale: sale.item_cost_at_sale,
             transaction_id: sale.transaction_id,
             sale_type: sale.sale_type,
+            status: sale.status ?? 'completed',
         };
         const items = salesByTransactionId.get(sale.transaction_id) || [];
         items.push(saleForState);
@@ -162,6 +163,7 @@ export const useShopData = () => {
             date: newTransaction.date,
             payment_method: newTransaction.payment_method,
             sale_type: item.sale_type,
+            // status: 'completed', // BUG: The 'status' column does not exist in the DB schema.
           });
         }
   
@@ -198,6 +200,7 @@ export const useShopData = () => {
             has_gst: s.has_gst,
             transaction_id: s.transaction_id,
             sale_type: s.sale_type,
+            status: 'completed',
         }));
         
         const newUiTransaction: Transaction = {
@@ -246,6 +249,7 @@ export const useShopData = () => {
         const inventoryMap = new Map(inventory.map(i => [i.id, i]));
 
         for (const saleItem of transactionToDelete.items) {
+             if (saleItem.status === 'returned') continue; // Do not restore stock for already returned items
             const inventoryItem = inventoryMap.get(saleItem.inventoryItemId);
             if (inventoryItem) {
                 const unitsToRestore = saleItem.sale_type === 'bundle'
@@ -282,6 +286,137 @@ export const useShopData = () => {
     },
     [user, inventory, sales, transactions]
 );
+
+const processReturn = useCallback(async (saleId: string) => {
+    if (!user || !inventory || !sales) return;
+
+    const saleToReturn = sales.find(s => s.id === saleId);
+    if (!saleToReturn || saleToReturn.status === 'returned') {
+        alert("This item has already been returned or does not exist.");
+        return;
+    }
+
+    const inventoryItem = inventory.find(i => i.id === saleToReturn.inventoryItemId);
+    if (!inventoryItem) {
+        alert("Could not find the original inventory item to process the return.");
+        return;
+    }
+
+    const unitsToRestore = saleToReturn.sale_type === 'bundle'
+        ? saleToReturn.quantity * (inventoryItem.items_per_bundle || 1)
+        : saleToReturn.quantity;
+
+    const newStockLevel = inventoryItem.stock + unitsToRestore;
+
+    const { error: stockError } = await supabase
+        .from('inventory')
+        .update({ stock: newStockLevel })
+        .eq('id', inventoryItem.id);
+
+    if (stockError) {
+        alert(`Failed to update stock: ${stockError.message}`);
+        return;
+    }
+
+    const { error: saleError } = await supabase
+        .from('sales')
+        .update({ status: 'returned' })
+        .eq('id', saleId);
+
+    if (saleError) {
+        // Attempt to revert stock change if sale update fails
+        await supabase.from('inventory').update({ stock: inventoryItem.stock }).eq('id', inventoryItem.id);
+        alert(`Failed to mark item as returned: ${saleError.message}`);
+        return;
+    }
+
+    // --- Update local state for immediate UI feedback ---
+    setInventory(prev => prev!.map(item =>
+        item.id === inventoryItem.id ? { ...item, stock: newStockLevel } : item
+    ));
+
+    const updateSaleInState = (sale: Sale) => sale.id === saleId ? { ...sale, status: 'returned' as 'returned' } : sale;
+
+    setSales(prev => prev!.map(updateSaleInState));
+    setTransactions(prev => prev!.map(t => ({
+        ...t,
+        items: t.items.map(updateSaleInState),
+    })));
+
+}, [user, inventory, sales]);
+
+const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, quantity: number, refundAmount: number) => {
+    if (!user || !inventory) {
+        alert("Cannot process return: user or inventory not loaded.");
+        return;
+    }
+
+    try {
+        const totalRefundAmount = -Math.abs(refundAmount); // Ensure it's a negative value
+
+        // 1. Create the transaction
+        const { data: newTransaction, error: transactionError } = await supabase
+            .from('transactions')
+            .insert({
+                user_id: user.id,
+                total_price: totalRefundAmount,
+                payment_method: 'Offline', // Returns are typically offline/cash
+                date: new Date().toISOString(),
+            })
+            .select()
+            .single();
+
+        if (transactionError) throw transactionError;
+
+        // 2. Create the negative sale record
+        const salePayload = {
+            inventoryItemId: itemToReturn.id,
+            productName: itemToReturn.name,
+            quantity: quantity,
+            totalPrice: totalRefundAmount,
+            user_id: user.id,
+            transaction_id: newTransaction.id,
+            item_cost_at_sale: itemToReturn.cost * quantity,
+            has_gst: itemToReturn.has_gst,
+            date: newTransaction.date,
+            payment_method: newTransaction.payment_method,
+            sale_type: 'loose' as 'loose',
+            // status: 'completed' as 'completed', // BUG: The 'status' column might not exist. Removing it.
+        };
+
+        const { data: newSale, error: salesError } = await supabase
+            .from('sales')
+            .insert(salePayload)
+            .select()
+            .single();
+
+        if (salesError) throw salesError;
+        
+        // 3. Update inventory stock
+        const newStockLevel = itemToReturn.stock + quantity;
+        const { error: stockError } = await supabase
+            .from('inventory')
+            .update({ stock: newStockLevel })
+            .eq('id', itemToReturn.id);
+
+        if (stockError) throw stockError;
+
+        // 4. Update local state
+        setInventory(prev => prev!.map(item => 
+            item.id === itemToReturn.id ? { ...item, stock: newStockLevel } : item
+        ));
+        
+        const newUiSale: Sale = { ...newSale, paymentMethod: newTransaction.payment_method, date: newTransaction.date };
+        const newUiTransaction: Transaction = { ...newTransaction, items: [newUiSale] };
+
+        setSales(prev => [newUiSale, ...(prev || [])]);
+        setTransactions(prev => [newUiTransaction, ...(prev || [])]);
+
+    } catch (error) {
+        console.error("[processStandaloneReturn] Error:", error);
+        alert(`Failed to process return: ${error instanceof Error ? error.message : "Unknown error"}`);
+    }
+}, [user, inventory]);
 
 
   const addInventoryItem = useCallback(
@@ -355,6 +490,8 @@ export const useShopData = () => {
     addTransaction,
     updateSale,
     deleteTransaction,
+    processReturn,
+    processStandaloneReturn,
     addInventoryItem,
     updateInventoryItem,
     deleteInventoryItem,

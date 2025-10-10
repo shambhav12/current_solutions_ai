@@ -8,15 +8,31 @@ interface ConfirmationModalProps {
     onConfirm: () => void;
     title: string;
     children: ReactNode;
+    confirmText?: string;
+    variant?: 'danger' | 'warning' | 'primary';
 }
 
-const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, onConfirm, title, children }) => {
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    onConfirm, 
+    title, 
+    children,
+    confirmText = 'Confirm Delete',
+    variant = 'danger'
+}) => {
     if (!isOpen) return null;
 
     const handleConfirm = () => {
         onConfirm();
         onClose();
     };
+
+    const variantClasses = {
+        danger: 'bg-danger hover:opacity-90 focus:ring-danger',
+        warning: 'bg-warning hover:opacity-90 focus:ring-warning',
+        primary: 'bg-primary hover:bg-primary-focus focus:ring-primary',
+    }
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={title}>
@@ -42,10 +58,10 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, onClose, 
                 </button>
                 <button
                     type="button"
-                    className="inline-flex justify-center w-full rounded-md border border-transparent px-4 py-2 bg-danger text-base font-medium text-white shadow-sm hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface focus:ring-danger sm:text-sm transition-colors"
+                    className={`inline-flex justify-center w-full rounded-md border border-transparent px-4 py-2 text-base font-medium text-white shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface sm:text-sm transition-colors ${variantClasses[variant]}`}
                     onClick={handleConfirm}
                 >
-                    Confirm Delete
+                    {confirmText}
                 </button>
             </div>
         </Modal>

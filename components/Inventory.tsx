@@ -105,7 +105,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit, inve
                     <input type="number" id="stock" value={stock} onChange={e => setStock(e.target.value)} min="0" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
                 </div>
                 <div>
-                    <label htmlFor="price" className="block text-sm font-medium text-text-muted">Loose Price (₹)</label>
+                    <label htmlFor="price" className="block text-sm font-medium text-text-muted">{isBundle ? 'Loose Price (₹)' : 'Selling Price (₹)'}</label>
                     <input type="number" id="price" value={price} onChange={e => setPrice(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
                 </div>
                  <div>
@@ -188,7 +188,7 @@ const InventoryCard: React.FC<{ item: InventoryItem; onEdit: () => void; onDelet
                 </div>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-text-muted">
-                <p>Loose Price: <span className="text-text-main">₹{item.price.toFixed(2)}</span></p>
+                <p>{item.is_bundle ? 'Loose Price' : 'Selling Price'}: <span className="text-text-main">₹{item.price.toFixed(2)}</span></p>
                 {item.is_bundle && <p>Bundle Price: <span className="text-text-main">₹{item.bundle_price?.toFixed(2)}</span> ({item.items_per_bundle} units)</p>}
                 <p>Cost/Unit: <span className="text-text-main">₹{item.cost.toFixed(2)}</span></p>
             </div>
