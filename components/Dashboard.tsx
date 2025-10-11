@@ -79,6 +79,11 @@ const Dashboard: React.FC = () => {
         [totalRevenue, totalProfit]
     );
 
+    const onCreditRevenue = useMemo(() =>
+        relevantSales.reduce((acc, sale) => (sale.paymentMethod === 'On Credit' ? acc + sale.totalPrice : acc), 0),
+        [relevantSales]
+    );
+
     const onlineRevenue = useMemo(() =>
         relevantSales.reduce((acc, sale) => (sale.paymentMethod === 'Online' ? acc + sale.totalPrice : acc), 0),
         [relevantSales]
@@ -180,6 +185,10 @@ const Dashboard: React.FC = () => {
                             <div className="flex justify-between">
                                 <span className="text-text-muted">Profit Margin:</span>
                                 <span className="font-semibold text-success">{profitMargin.toFixed(2)}%</span>
+                            </div>
+                             <div className="flex justify-between">
+                                <span className="text-text-muted">Pending Payments:</span>
+                                <span className="font-semibold text-warning">₹{onCreditRevenue.toFixed(2)}</span>
                             </div>
                         </div>
                     </div>

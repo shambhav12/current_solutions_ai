@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Page, Sale, InventoryItem, Transaction } from './types';
+// FIX: Imported CartItemForTransaction to correctly type the addTransaction function.
+import { Page, Sale, InventoryItem, Transaction, CartItemForTransaction } from './types';
 import { useShopData } from './hooks/useShopData';
 import { useAuth } from './AuthContext';
 import { DashboardIcon, SalesIcon, InventoryIcon, InsightsIcon, MenuIcon, CloseIcon, ReturnIcon } from './components/Icons';
@@ -16,8 +17,10 @@ export const ShopContext = React.createContext<{
   sales: Sale[] | null;
   transactions: Transaction[] | null;
   inventory: InventoryItem[] | null;
-  addTransaction: (items: any, paymentMethod: 'Online' | 'Offline') => Promise<void>;
+  // FIX: Updated addTransaction signature to accept an optional customerInfo object.
+  addTransaction: (items: CartItemForTransaction[], paymentMethod: 'Online' | 'Offline' | 'On Credit', customerInfo?: { name?: string; phone?: string }) => Promise<void>;
   updateSale: (updatedSale: Sale) => void;
+  updateTransactionPaymentMethod: (transactionId: string, newPaymentMethod: 'Online' | 'Offline') => Promise<void>;
   deleteTransaction: (transactionId: string) => void;
   processReturn: (saleId: string) => Promise<void>;
   processStandaloneReturn: (itemToReturn: InventoryItem, quantity: number, refundAmount: number) => Promise<void>;
@@ -30,6 +33,7 @@ export const ShopContext = React.createContext<{
   inventory: null,
   addTransaction: async () => {},
   updateSale: () => {},
+  updateTransactionPaymentMethod: async () => {},
   deleteTransaction: () => {},
   processReturn: async () => {},
   processStandaloneReturn: async () => {},
@@ -48,6 +52,7 @@ const App: React.FC = () => {
     inventory,
     addTransaction,
     updateSale,
+    updateTransactionPaymentMethod,
     deleteTransaction,
     processReturn,
     processStandaloneReturn,
@@ -80,6 +85,7 @@ const App: React.FC = () => {
       inventory,
       addTransaction,
       updateSale,
+      updateTransactionPaymentMethod,
       deleteTransaction,
       processReturn,
       processStandaloneReturn,
@@ -87,7 +93,7 @@ const App: React.FC = () => {
       updateInventoryItem,
       deleteInventoryItem,
     }),
-    [sales, transactions, inventory, addTransaction, updateSale, deleteTransaction, processReturn, processStandaloneReturn, addInventoryItem, updateInventoryItem, deleteInventoryItem]
+    [sales, transactions, inventory, addTransaction, updateSale, updateTransactionPaymentMethod, deleteTransaction, processReturn, processStandaloneReturn, addInventoryItem, updateInventoryItem, deleteInventoryItem]
   );
 
   const renderPage = useCallback(() => {

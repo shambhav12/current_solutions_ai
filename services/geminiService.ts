@@ -1,17 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { InventoryItem, Sale, SalesPrediction, InventoryInsight } from "../types";
-import { GEMINI_API_KEY } from "../config";
 
-/**
- * NOTE: This service calls the Google Gemini API directly from the client.
- * The API key is provided via the config file.
- */
 const generateContent = async (prompt: string, schema: any) => {
-    if (!GEMINI_API_KEY) {
-        throw new Error("API_KEY_ERROR: The Gemini API key is missing. Please check your env.ts configuration file.");
-    }
-
-    const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+    // The API key is sourced from a secure environment variable as per project guidelines.
+    // This variable is assumed to be configured in the deployment environment.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -21,8 +14,7 @@ const generateContent = async (prompt: string, schema: any) => {
             responseSchema: schema,
         }
     });
-
-    // The response text is now guaranteed to be a JSON string that conforms to the schema.
+    
     const responseText = response.text;
     return JSON.parse(responseText);
 };

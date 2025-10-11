@@ -6,6 +6,31 @@ import ConfirmationModal from './ui/ConfirmationModal';
 import { PlusIcon, EditIcon, DeleteIcon } from './Icons';
 import { useDebounce } from '../hooks/useDebounce';
 
+type NewInventoryItem = {
+    key: number;
+    name: string;
+    stock: string;
+    price: string;
+    cost: string;
+    hasGst: boolean;
+    isBundle: boolean;
+    bundlePrice: string;
+    itemsPerBundle: string;
+};
+
+const createNewItem = (): NewInventoryItem => ({
+    key: Math.random(),
+    name: '',
+    stock: '0',
+    price: '0',
+    cost: '0',
+    hasGst: false,
+    isBundle: false,
+    bundlePrice: '',
+    itemsPerBundle: '',
+});
+
+
 interface InventoryFormProps {
     onClose: () => void;
     itemToEdit?: InventoryItem | null;
@@ -14,135 +39,249 @@ interface InventoryFormProps {
 
 const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit, inventory }) => {
     const { addInventoryItem, updateInventoryItem } = useContext(ShopContext);
-    const [name, setName] = useState('');
-    const [stock, setStock] = useState<string>('0');
-    const [price, setPrice] = useState<string>('0');
-    const [cost, setCost] = useState<string>('0');
-    const [hasGst, setHasGst] = useState(false);
-    // Bundle fields
-    const [isBundle, setIsBundle] = useState(false);
-    const [bundlePrice, setBundlePrice] = useState<string>('');
-    const [itemsPerBundle, setItemsPerBundle] = useState<string>('');
 
+    // State for multiple item creation
+    const [items, setItems] = useState<NewInventoryItem[]>([createNewItem()]);
+
+    // State for single item editing
+    const [editName, setEditName] = useState('');
+    const [editStock, setEditStock] = useState('0');
+    const [editPrice, setEditPrice] = useState('0');
+    const [editCost, setEditCost] = useState('0');
+    const [editHasGst, setEditHasGst] = useState(false);
+    const [editIsBundle, setEditIsBundle] = useState(false);
+    const [editBundlePrice, setEditBundlePrice] = useState('');
+    const [editItemsPerBundle, setEditItemsPerBundle] = useState('');
 
     useEffect(() => {
         if (itemToEdit) {
-            setName(itemToEdit.name);
-            setStock(String(itemToEdit.stock));
-            setPrice(String(itemToEdit.price.toFixed(2)));
-            setCost(String(itemToEdit.cost.toFixed(2)));
-            setHasGst(itemToEdit.has_gst || false);
-            setIsBundle(itemToEdit.is_bundle || false);
-            setBundlePrice(itemToEdit.bundle_price?.toFixed(2) || '');
-            setItemsPerBundle(String(itemToEdit.items_per_bundle || ''));
+            setEditName(itemToEdit.name);
+            setEditStock(String(itemToEdit.stock));
+            setEditPrice(String(itemToEdit.price.toFixed(2)));
+            setEditCost(String(itemToEdit.cost.toFixed(2)));
+            setEditHasGst(itemToEdit.has_gst || false);
+            setEditIsBundle(itemToEdit.is_bundle || false);
+            setEditBundlePrice(itemToEdit.bundle_price?.toFixed(2) || '');
+            setEditItemsPerBundle(String(itemToEdit.items_per_bundle || ''));
         } else {
-            // Reset form for new item
-            setName('');
-            setStock('0');
-            setPrice('0');
-            setCost('0');
-            setHasGst(false);
-            setIsBundle(false);
-            setBundlePrice('');
-            setItemsPerBundle('');
+            setItems([createNewItem()]);
         }
     }, [itemToEdit]);
+    
+    const handleItemChange = (index: number, field: keyof NewInventoryItem, value: any) => {
+        const newItems = [...items];
+        (newItems[index] as any)[field] = value;
+        setItems(newItems);
+    };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
+    const addItemRow = () => setItems([...items, createNewItem()]);
+    const removeItemRow = (index: number) => setItems(items.filter((_, i) => i !== index));
 
-        const numStock = Number(stock);
-        const numPrice = Number(price);
-        const numCost = Number(cost);
-        const numBundlePrice = Number(bundlePrice);
-        const numItemsPerBundle = Number(itemsPerBundle);
+    const validateAndPreparePayload = (item: NewInventoryItem, allNames: Set<string>) => {
+        const trimmedName = item.name.trim();
+        if (!trimmedName) throw new Error("Product name is required.");
 
-        if (!Number.isInteger(numStock) || numStock < 0) { alert('Stock must be a non-negative whole number.'); return; }
-        if (isNaN(numPrice) || numPrice < 0) { alert('Price cannot be negative.'); return; }
-        if (isNaN(numCost) || numCost < 0) { alert('Cost cannot be negative.'); return; }
-        if (numPrice < numCost) { alert('Selling price cannot be less than the cost price.'); return; }
-        
-        if (isBundle) {
-            if(isNaN(numBundlePrice) || numBundlePrice <= 0) { alert('Bundle price must be a positive number.'); return; }
-            if(!Number.isInteger(numItemsPerBundle) || numItemsPerBundle <= 1) { alert('Items per bundle must be a whole number greater than 1.'); return; }
-        }
+        const lowerCaseName = trimmedName.toLowerCase();
+        if (allNames.has(lowerCaseName)) throw new Error(`Duplicate name found: "${trimmedName}". Please use unique names.`);
+        allNames.add(lowerCaseName);
 
-        const trimmedName = name.trim().toLowerCase();
-        const basePayload = {
-            name: name.trim(), 
-            stock: numStock, 
-            price: numPrice, 
+        const numStock = Number(item.stock);
+        const numPrice = Number(item.price);
+        const numCost = Number(item.cost);
+        if (!Number.isInteger(numStock) || numStock < 0) throw new Error(`Stock for "${trimmedName}" must be a non-negative whole number.`);
+        if (isNaN(numPrice) || numPrice < 0) throw new Error(`Price for "${trimmedName}" cannot be negative.`);
+        if (isNaN(numCost) || numCost < 0) throw new Error(`Cost for "${trimmedName}" cannot be negative.`);
+        if (numPrice < numCost) throw new Error(`Selling price for "${trimmedName}" cannot be less than its cost.`);
+
+        const payload: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'> = {
+            name: trimmedName,
+            stock: numStock,
+            price: numPrice,
             cost: numCost,
-            has_gst: hasGst,
-            is_bundle: isBundle,
-            bundle_price: isBundle ? numBundlePrice : undefined,
-            items_per_bundle: isBundle ? numItemsPerBundle : undefined,
+            has_gst: item.hasGst,
+            is_bundle: item.isBundle,
+            bundle_price: undefined,
+            items_per_bundle: undefined,
         };
 
+        if (item.isBundle) {
+            const numBundlePrice = Number(item.bundlePrice);
+            const numItemsPerBundle = Number(item.itemsPerBundle);
+            if (isNaN(numBundlePrice) || numBundlePrice <= 0) throw new Error(`Bundle price for "${trimmedName}" must be a positive number.`);
+            if (!Number.isInteger(numItemsPerBundle) || numItemsPerBundle <= 1) throw new Error(`Items per bundle for "${trimmedName}" must be a whole number greater than 1.`);
+            payload.bundle_price = numBundlePrice;
+            payload.items_per_bundle = numItemsPerBundle;
+        }
+        return payload;
+    };
+
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
         if (itemToEdit) {
-            if (inventory.some(item => item.id !== itemToEdit.id && item.name.trim().toLowerCase() === trimmedName)) {
+            // Handle editing a single item
+            const numStock = Number(editStock);
+            const numPrice = Number(editPrice);
+            const numCost = Number(editCost);
+            const numBundlePrice = Number(editBundlePrice);
+            const numItemsPerBundle = Number(editItemsPerBundle);
+
+            if (!Number.isInteger(numStock) || numStock < 0) { alert('Stock must be a non-negative whole number.'); return; }
+            if (numPrice < numCost) { alert('Selling price cannot be less than the cost price.'); return; }
+            if (editIsBundle) {
+                if(isNaN(numBundlePrice) || numBundlePrice <= 0) { alert('Bundle price must be a positive number.'); return; }
+                if(!Number.isInteger(numItemsPerBundle) || numItemsPerBundle <= 1) { alert('Items per bundle must be a whole number greater than 1.'); return; }
+            }
+            if (inventory.some(item => item.id !== itemToEdit.id && item.name.trim().toLowerCase() === editName.trim().toLowerCase())) {
                 alert('An item with this name already exists.'); return;
             }
-            updateInventoryItem({ ...basePayload, id: itemToEdit.id, user_id: itemToEdit.user_id });
+
+            updateInventoryItem({ 
+                id: itemToEdit.id, 
+                user_id: itemToEdit.user_id,
+                name: editName.trim(), 
+                stock: numStock, 
+                price: numPrice, 
+                cost: numCost,
+                has_gst: editHasGst,
+                is_bundle: editIsBundle,
+                bundle_price: editIsBundle ? numBundlePrice : undefined,
+                items_per_bundle: editIsBundle ? numItemsPerBundle : undefined,
+            });
+
         } else {
-             if (inventory.some(item => item.name.trim().toLowerCase() === trimmedName)) {
-                alert('An item with this name already exists.'); return;
+            // Handle adding multiple items
+            try {
+                const existingNames = new Set(inventory.map(i => i.name.trim().toLowerCase()));
+                const payloads = items.map(item => validateAndPreparePayload(item, existingNames));
+                await Promise.all(payloads.map(payload => addInventoryItem(payload)));
+            } catch (error) {
+                alert(error instanceof Error ? error.message : "An unknown validation error occurred.");
+                return;
             }
-            addInventoryItem(basePayload);
         }
         onClose();
     };
 
-    return (
-         <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-                <label htmlFor="name" className="block text-sm font-medium text-text-muted">Product Name</label>
-                <input type="text" id="name" value={name} onChange={e => setName(e.target.value)} required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
+    if (itemToEdit) {
+        return (
+             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label htmlFor="stock" className="block text-sm font-medium text-text-muted">Stock (Units)</label>
-                    <input type="number" id="stock" value={stock} onChange={e => setStock(e.target.value)} min="0" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
+                    <label htmlFor="name" className="block text-sm font-medium text-text-muted">Product Name</label>
+                    <input type="text" id="name" value={editName} onChange={e => setEditName(e.target.value)} required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
                 </div>
-                <div>
-                    <label htmlFor="price" className="block text-sm font-medium text-text-muted">{isBundle ? 'Loose Price (₹)' : 'Selling Price (₹)'}</label>
-                    <input type="number" id="price" value={price} onChange={e => setPrice(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
-                </div>
-                 <div>
-                    <label htmlFor="cost" className="block text-sm font-medium text-text-muted">Cost per Unit (₹)</label>
-                    <input type="number" id="cost" value={cost} onChange={e => setCost(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" />
-                </div>
-            </div>
-             <div className="pt-2 space-y-4">
-                <label className="flex items-center cursor-pointer">
-                    <input type="checkbox" checked={hasGst} onChange={e => setHasGst(e.target.checked)} className="h-4 w-4 rounded text-primary border-border focus:ring-primary bg-background" />
-                    <span className="ml-2 text-sm text-text-main">Includes GST</span>
-                </label>
-                 <label className="flex items-center cursor-pointer">
-                    <input type="checkbox" checked={isBundle} onChange={e => setIsBundle(e.target.checked)} className="h-4 w-4 rounded text-primary border-border focus:ring-primary bg-background" />
-                    <span className="ml-2 text-sm text-text-main">Is Bundle Item? (e.g., sold as pack)</span>
-                </label>
-            </div>
-
-            {isBundle && (
-                 <div className="p-4 border border-dashed border-primary/50 rounded-lg space-y-4 bg-primary/5">
-                    <h4 className="text-sm font-semibold text-text-main">Bundle Details</h4>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="bundle-price" className="block text-sm font-medium text-text-muted">Bundle Price (₹)</label>
-                            <input type="number" id="bundle-price" value={bundlePrice} onChange={e => setBundlePrice(e.target.value)} min="0.01" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
-                        </div>
-                        <div>
-                            <label htmlFor="items-per-bundle" className="block text-sm font-medium text-text-muted">Items per Bundle</label>
-                            <input type="number" id="items-per-bundle" value={itemsPerBundle} onChange={e => setItemsPerBundle(e.target.value)} min="2" step="1" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
-                        </div>
+                <div className="grid grid-cols-3 gap-4">
+                    <div>
+                        <label htmlFor="stock" className="block text-sm font-medium text-text-muted">Stock (Units)</label>
+                        <input type="number" id="stock" value={editStock} onChange={e => setEditStock(e.target.value)} min="0" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                    </div>
+                    <div>
+                        <label htmlFor="price" className="block text-sm font-medium text-text-muted">{editIsBundle ? 'Loose Price' : 'Selling Price'}</label>
+                        <input type="number" id="price" value={editPrice} onChange={e => setEditPrice(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                    </div>
+                     <div>
+                        <label htmlFor="cost" className="block text-sm font-medium text-text-muted">Cost per Unit</label>
+                        <input type="number" id="cost" value={editCost} onChange={e => setEditCost(e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
                     </div>
                 </div>
-            )}
+                 <div className="pt-2 space-y-4">
+                    <label className="flex items-center cursor-pointer">
+                        <input type="checkbox" checked={editHasGst} onChange={e => setEditHasGst(e.target.checked)} className="h-4 w-4 rounded text-primary border-border focus:ring-primary bg-background" />
+                        <span className="ml-2 text-sm text-text-main">Includes GST</span>
+                    </label>
+                     <label className="flex items-center cursor-pointer">
+                        <input type="checkbox" checked={editIsBundle} onChange={e => setEditIsBundle(e.target.checked)} className="h-4 w-4 rounded text-primary border-border focus:ring-primary bg-background" />
+                        <span className="ml-2 text-sm text-text-main">Is Bundle Item?</span>
+                    </label>
+                </div>
 
-            <div className="flex justify-end pt-4">
-                <button type="submit" className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors">
-                    {itemToEdit ? 'Update Item' : 'Add Item'}
+                {editIsBundle && (
+                     <div className="p-4 border border-dashed border-primary/50 rounded-lg space-y-4 bg-primary/5">
+                        <h4 className="text-sm font-semibold text-text-main">Bundle Details</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label htmlFor="bundle-price" className="block text-sm font-medium text-text-muted">Bundle Price</label>
+                                <input type="number" id="bundle-price" value={editBundlePrice} onChange={e => setEditBundlePrice(e.target.value)} min="0.01" step="0.01" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                            </div>
+                            <div>
+                                <label htmlFor="items-per-bundle" className="block text-sm font-medium text-text-muted">Items per Bundle</label>
+                                <input type="number" id="items-per-bundle" value={editItemsPerBundle} onChange={e => setEditItemsPerBundle(e.target.value)} min="2" step="1" required className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex justify-end pt-4">
+                    <button type="submit" className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors">
+                        Update Item
+                    </button>
+                </div>
+            </form>
+        );
+    }
+    
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+            {items.map((item, index) => (
+                <div key={item.key} className="p-4 border border-border rounded-lg space-y-4 relative bg-background">
+                     {items.length > 1 && (
+                        <button type="button" onClick={() => removeItemRow(index)} className="absolute top-2 right-2 text-danger p-1 rounded-full hover:bg-surface-hover">
+                            <DeleteIcon />
+                        </button>
+                    )}
+                    <div>
+                        <label className="block text-sm font-medium text-text-muted">Product Name</label>
+                        <input type="text" value={item.name} onChange={e => handleItemChange(index, 'name', e.target.value)} required className="mt-1 block w-full bg-surface border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                    </div>
+                     <div className="grid grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-text-muted">Stock</label>
+                            <input type="number" value={item.stock} onChange={e => handleItemChange(index, 'stock', e.target.value)} min="0" required className="mt-1 block w-full bg-surface border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                        </div>
+                        <div>
+                             <label className="block text-sm font-medium text-text-muted">{item.isBundle ? 'Loose Price' : 'Selling Price'}</label>
+                            <input type="number" value={item.price} onChange={e => handleItemChange(index, 'price', e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-surface border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-text-muted">Cost/Unit</label>
+                            <input type="number" value={item.cost} onChange={e => handleItemChange(index, 'cost', e.target.value)} min="0" step="0.01" required className="mt-1 block w-full bg-surface border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                        </div>
+                    </div>
+                    <div className="pt-2 space-y-2">
+                        <label className="flex items-center cursor-pointer">
+                           <input type="checkbox" checked={item.hasGst} onChange={e => handleItemChange(index, 'hasGst', e.target.checked)} className="h-4 w-4 rounded text-primary border-border focus:ring-primary bg-surface" />
+                           <span className="ml-2 text-sm text-text-main">Includes GST</span>
+                        </label>
+                        <label className="flex items-center cursor-pointer">
+                           <input type="checkbox" checked={item.isBundle} onChange={e => handleItemChange(index, 'isBundle', e.target.checked)} className="h-4 w-4 rounded text-primary border-border focus:ring-primary bg-surface" />
+                           <span className="ml-2 text-sm text-text-main">Is Bundle Item?</span>
+                        </label>
+                    </div>
+                     {item.isBundle && (
+                         <div className="p-3 border border-dashed border-primary/50 rounded-lg space-y-3 bg-primary/5">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-text-muted">Bundle Price</label>
+                                    <input type="number" value={item.bundlePrice} onChange={e => handleItemChange(index, 'bundlePrice', e.target.value)} min="0.01" step="0.01" required={item.isBundle} className="mt-1 block w-full bg-surface border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-text-muted">Items/Bundle</label>
+                                    <input type="number" value={item.itemsPerBundle} onChange={e => handleItemChange(index, 'itemsPerBundle', e.target.value)} min="2" step="1" required={item.isBundle} className="mt-1 block w-full bg-surface border-border rounded-md shadow-sm py-2 px-3 sm:text-sm" />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ))}
+            </div>
+            <div className="pt-4 border-t border-border flex items-center justify-between">
+                <button type="button" onClick={addItemRow} className="inline-flex items-center px-3 py-2 border border-border text-sm font-medium rounded-md text-text-main bg-surface hover:bg-surface-hover">
+                    <PlusIcon /> <span className="ml-2">Add Another Item</span>
+                </button>
+                <button type="submit" className="inline-flex justify-center items-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary">
+                    Add {items.length} Item(s)
                 </button>
             </div>
         </form>
@@ -321,7 +460,7 @@ const Inventory: React.FC = () => {
                 </div>
             </div>
 
-            <Modal title={itemToEdit ? "Edit Inventory Item" : "Add New Inventory Item"} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+            <Modal title={itemToEdit ? "Edit Inventory Item" : "Add New Inventory Item(s)"} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
                 <InventoryForm onClose={() => setIsModalOpen(false)} itemToEdit={itemToEdit} inventory={inventory} />
             </Modal>
 
@@ -342,7 +481,6 @@ const Inventory: React.FC = () => {
                 )}
             </ConfirmationModal>
             
-            {/* Mobile Card View */}
             <div className="md:hidden space-y-4">
                  {filteredInventory.length > 0 ? (
                     filteredInventory.map(item => 
@@ -361,7 +499,6 @@ const Inventory: React.FC = () => {
                 )}
             </div>
 
-            {/* Desktop Table View */}
             <div className="hidden md:block bg-surface rounded-lg shadow border border-border overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-border">

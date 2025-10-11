@@ -7,10 +7,6 @@
 // 1. SUPABASE_URL & SUPABASE_ANON_KEY:
 //    - Go to your Supabase project -> Settings (Gear icon) -> API.
 //    - Copy the 'Project URL' and the 'anon' 'public' key.
-//
-// 2. GEMINI_API_KEY:
-//    - Go to Google AI Studio -> "Get API key".
-//    - Create a new API key.
 // -----------------------------------------------------------------------------
 
 export const GOOGLE_CLIENT_ID = '1046189549493-bcht5m68nd62cbkgmi5b9jd08oqa6mmv.apps.googleusercontent.com';
@@ -19,7 +15,3 @@ export const GOOGLE_CLIENT_ID = '1046189549493-bcht5m68nd62cbkgmi5b9jd08oqa6mmv.
 // from your Supabase project settings > API.
 export const SUPABASE_URL = 'https://egxujjbajpneyvzgxowf.supabase.co';
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVneHVqamJhanBuZXl2emd4b3dmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MDMwNTAsImV4cCI6MjA3NDQ3OTA1MH0.oRRyDviTcqtp-HEjZfJbUBt17kXglXRCW1cEDzGrGVk';
-
-// IMPORTANT: Replace with your Google Gemini API Key.
-// Get your key from Google AI Studio: https://aistudio.google.com/app/apikey
-export const GEMINI_API_KEY = 'AIzaSyAZ7NYYVOdaqrnoytXb1wl20OQt2E0lUj4';

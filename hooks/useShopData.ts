@@ -14,7 +14,6 @@ export const useShopData = () => {
     setIsLoading(true);
     let isCancelled = false;
     try {
-      // Fetch all necessary data in parallel
       const [
         { data: inventoryData, error: inventoryError },
         { data: transactionsData, error: transactionsError },
@@ -30,15 +29,13 @@ export const useShopData = () => {
       if (transactionsError) throw transactionsError;
       if (salesError) throw salesError;
 
-      const inventoryMap = new Map<string, InventoryItem>(inventoryData.map(item => [item.id, item]));
-
       const salesByTransactionId = new Map<string, Sale[]>();
       salesData.forEach(sale => {
         const saleForState: Sale = {
             id: sale.id,
             user_id: sale.user_id,
             inventoryItemId: sale.inventoryItemId,
-            productName: sale.productName || inventoryMap.get(sale.inventoryItemId)?.name || 'Unknown Product',
+            productName: sale.productName,
             quantity: sale.quantity,
             totalPrice: sale.totalPrice,
             date: sale.date,
@@ -60,6 +57,8 @@ export const useShopData = () => {
         total_price: t.total_price,
         payment_method: t.payment_method,
         date: t.date,
+        customer_name: t.customer_name,
+        customer_phone: t.customer_phone,
         items: (salesByTransactionId.get(t.id) || []).map(item => ({
             ...item,
             date: t.date,
@@ -80,7 +79,6 @@ export const useShopData = () => {
 
     } catch (error) {
       if (!isCancelled) {
-        console.error('[ShopData] Error loading data:', error);
         setInventory([]);
         setSales([]);
         setTransactions([]);
@@ -108,26 +106,44 @@ export const useShopData = () => {
     }
   }, [user, isAuthLoading, fetchData]);
 
-  // --- actions ---
-
   const addTransaction = useCallback(
-    async (items: CartItemForTransaction[], paymentMethod: 'Online' | 'Offline') => {
+    async (
+        items: CartItemForTransaction[],
+        paymentMethod: 'Online' | 'Offline' | 'On Credit',
+        customerInfo?: { name?: string; phone?: string }
+    ) => {
       if (!user || items.length === 0) {
-        console.error('[addTransaction] Aborted: user not available or no items.');
         return;
       }
   
       try {
         const grandTotal = items.reduce((acc, item) => acc + item.totalPrice, 0);
   
-        const { data: newTransaction, error: transactionError } = await supabase
-          .from('transactions')
-          .insert({
+        // FIX: Added robust check for NaN on the grand total before sending to Supabase.
+        if (isNaN(grandTotal) || typeof grandTotal !== 'number') {
+            alert("Transaction failed: Invalid total amount. Please review the items in your cart.");
+            return;
+        }
+
+        const transactionPayload: { [key: string]: any } = {
             user_id: user.id,
             total_price: grandTotal,
             payment_method: paymentMethod,
             date: new Date().toISOString(),
-          })
+        };
+
+        if (paymentMethod === 'On Credit' && customerInfo) {
+            if (customerInfo.name && customerInfo.name.trim()) {
+                transactionPayload.customer_name = customerInfo.name.trim();
+            }
+            if (customerInfo.phone && customerInfo.phone.trim()) {
+                transactionPayload.customer_phone = customerInfo.phone.trim();
+            }
+        }
+
+        const { data: newTransaction, error: transactionError } = await supabase
+          .from('transactions')
+          .insert(transactionPayload)
           .select()
           .single();
   
@@ -146,6 +162,12 @@ export const useShopData = () => {
           if (fetchError || !currentItem) throw fetchError || new Error(`Item ${item.productName} not found.`);
           
           const unitsToDeduct = item.sale_type === 'bundle' ? item.quantity * (item.items_per_bundle || 1) : item.quantity;
+          
+          // FIX: Added robust check for NaN on the item cost calculation.
+          const itemCostAtSale = (currentItem.cost || 0) * unitsToDeduct;
+          if (isNaN(itemCostAtSale)) {
+            throw new Error(`Failed to calculate cost for ${item.productName}. Please check its cost in inventory.`);
+          }
 
           if (currentItem.stock < unitsToDeduct) throw new Error(`Not enough stock for ${item.productName}.`);
   
@@ -158,12 +180,11 @@ export const useShopData = () => {
             totalPrice: item.totalPrice,
             user_id: user.id,
             transaction_id: newTransaction.id,
-            item_cost_at_sale: currentItem.cost * unitsToDeduct, // Total cost for units sold
+            item_cost_at_sale: itemCostAtSale,
             has_gst: currentItem.has_gst,
             date: newTransaction.date,
             payment_method: newTransaction.payment_method,
             sale_type: item.sale_type,
-            // status: 'completed', // BUG: The 'status' column does not exist in the DB schema.
           });
         }
   
@@ -174,60 +195,80 @@ export const useShopData = () => {
   
         const { data: newSales, error: salesError } = await supabase.from('sales').insert(salePayloads).select();
         if (salesError) throw salesError;
-  
-        const inventoryMap = new Map(inventory?.map(i => [i.id, i]));
         
-        setInventory(prev => {
-            if (!prev) return [];
-            return prev.map(item => {
-                if (inventoryUpdates.has(item.id)) {
-                    return { ...item, stock: inventoryUpdates.get(item.id)! };
-                }
-                return item;
-            });
-        });
-
-        const newUiSales: Sale[] = newSales.map(s => ({
-            id: s.id,
-            user_id: s.user_id,
-            inventoryItemId: s.inventoryItemId,
-            productName: s.productName,
-            quantity: s.quantity,
-            totalPrice: s.totalPrice,
-            paymentMethod: newTransaction.payment_method as 'Online' | 'Offline',
-            date: newTransaction.date,
-            itemCostAtSale: s.item_cost_at_sale,
-            has_gst: s.has_gst,
-            transaction_id: s.transaction_id,
-            sale_type: s.sale_type,
-            status: 'completed',
-        }));
-        
-        const newUiTransaction: Transaction = {
-            id: newTransaction.id,
-            user_id: newTransaction.user_id,
-            total_price: newTransaction.total_price,
-            payment_method: newTransaction.payment_method,
-            date: newTransaction.date,
-            items: newUiSales,
-        };
-  
-        setTransactions(prev => [newUiTransaction, ...(prev || [])]);
-        setSales(prev => [...newUiSales, ...(prev || [])]);
+        await fetchData(user.id);
   
       } catch (error) {
-        console.error('[addTransaction] A critical error occurred:', error);
         alert(`Failed to add sale: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     },
-    [user, inventory]
+    [user, fetchData]
   );
   
   const updateSale = useCallback(
     async (updatedSale: Sale) => {
-      // This function is deprecated in the multi-item world.
+      // This function is deprecated and no longer used.
     },
-    [user, sales, inventory]
+    []
+  );
+
+    const updateTransactionPaymentMethod = useCallback(
+    async (transactionId: string, newPaymentMethod: 'Online' | 'Offline') => {
+        if (!user) return;
+
+        try {
+            const { error: transactionError } = await supabase
+                .from('transactions')
+                .update({ payment_method: newPaymentMethod })
+                .eq('id', transactionId)
+                .eq('user_id', user.id);
+
+            if (transactionError) throw transactionError;
+
+            const { error: salesError } = await supabase
+                .from('sales')
+                .update({ payment_method: newPaymentMethod })
+                .eq('transaction_id', transactionId)
+                .eq('user_id', user.id);
+
+            if (salesError) throw salesError;
+
+            // FIX: Manually update the local state to avoid re-fetching and ensure
+            // the UI updates instantly and reliably.
+            setTransactions(currentTransactions => {
+                if (!currentTransactions) return null;
+                return currentTransactions.map(t => {
+                    if (t.id === transactionId) {
+                        return {
+                            ...t,
+                            payment_method: newPaymentMethod,
+                            items: t.items.map(item => ({
+                                ...item,
+                                paymentMethod: newPaymentMethod,
+                            }))
+                        };
+                    }
+                    return t;
+                });
+            });
+
+            setSales(currentSales => {
+                if (!currentSales) return null;
+                return currentSales.map(s => {
+                    if (s.transaction_id === transactionId) {
+                        return { ...s, paymentMethod: newPaymentMethod };
+                    }
+                    return s;
+                });
+            });
+
+        } catch (error) {
+            alert(`Failed to update payment method: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            // If something goes wrong, re-fetch to ensure data consistency.
+            if (user) await fetchData(user.id);
+        }
+    },
+    [user, fetchData]
   );
 
   const deleteTransaction = useCallback(
@@ -240,7 +281,6 @@ export const useShopData = () => {
         const { error: deleteError } = await supabase.from('transactions').delete().eq('id', transactionId);
 
         if (deleteError) {
-            console.error('Error deleting transaction:', deleteError);
             alert(`Failed to delete sale: ${deleteError.message}`);
             return;
         }
@@ -249,7 +289,7 @@ export const useShopData = () => {
         const inventoryMap = new Map(inventory.map(i => [i.id, i]));
 
         for (const saleItem of transactionToDelete.items) {
-             if (saleItem.status === 'returned') continue; // Do not restore stock for already returned items
+             if (saleItem.status === 'returned') continue;
             const inventoryItem = inventoryMap.get(saleItem.inventoryItemId);
             if (inventoryItem) {
                 const unitsToRestore = saleItem.sale_type === 'bundle'
@@ -272,19 +312,9 @@ export const useShopData = () => {
             }
         }
         
-        setTransactions(prev => prev ? prev.filter(t => t.id !== transactionId) : []);
-        setSales(prev => prev ? prev.filter(s => s.transaction_id !== transactionId) : []);
-        setInventory(prev => {
-            if (!prev) return [];
-            return prev.map(item => {
-                if (stockRestorationMap.has(item.id)) {
-                    return { ...item, stock: item.stock + stockRestorationMap.get(item.id)! };
-                }
-                return item;
-            });
-        });
+        await fetchData(user.id);
     },
-    [user, inventory, sales, transactions]
+    [user, inventory, sales, transactions, fetchData]
 );
 
 const processReturn = useCallback(async (saleId: string) => {
@@ -324,26 +354,14 @@ const processReturn = useCallback(async (saleId: string) => {
         .eq('id', saleId);
 
     if (saleError) {
-        // Attempt to revert stock change if sale update fails
         await supabase.from('inventory').update({ stock: inventoryItem.stock }).eq('id', inventoryItem.id);
         alert(`Failed to mark item as returned: ${saleError.message}`);
         return;
     }
 
-    // --- Update local state for immediate UI feedback ---
-    setInventory(prev => prev!.map(item =>
-        item.id === inventoryItem.id ? { ...item, stock: newStockLevel } : item
-    ));
+    await fetchData(user.id);
 
-    const updateSaleInState = (sale: Sale) => sale.id === saleId ? { ...sale, status: 'returned' as 'returned' } : sale;
-
-    setSales(prev => prev!.map(updateSaleInState));
-    setTransactions(prev => prev!.map(t => ({
-        ...t,
-        items: t.items.map(updateSaleInState),
-    })));
-
-}, [user, inventory, sales]);
+}, [user, inventory, sales, fetchData]);
 
 const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, quantity: number, refundAmount: number) => {
     if (!user || !inventory) {
@@ -352,15 +370,14 @@ const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, 
     }
 
     try {
-        const totalRefundAmount = -Math.abs(refundAmount); // Ensure it's a negative value
+        const totalRefundAmount = -Math.abs(refundAmount);
 
-        // 1. Create the transaction
         const { data: newTransaction, error: transactionError } = await supabase
             .from('transactions')
             .insert({
                 user_id: user.id,
                 total_price: totalRefundAmount,
-                payment_method: 'Offline', // Returns are typically offline/cash
+                payment_method: 'Offline',
                 date: new Date().toISOString(),
             })
             .select()
@@ -368,7 +385,6 @@ const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, 
 
         if (transactionError) throw transactionError;
 
-        // 2. Create the negative sale record
         const salePayload = {
             inventoryItemId: itemToReturn.id,
             productName: itemToReturn.name,
@@ -381,7 +397,6 @@ const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, 
             date: newTransaction.date,
             payment_method: newTransaction.payment_method,
             sale_type: 'loose' as 'loose',
-            // status: 'completed' as 'completed', // BUG: The 'status' column might not exist. Removing it.
         };
 
         const { data: newSale, error: salesError } = await supabase
@@ -392,7 +407,6 @@ const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, 
 
         if (salesError) throw salesError;
         
-        // 3. Update inventory stock
         const newStockLevel = itemToReturn.stock + quantity;
         const { error: stockError } = await supabase
             .from('inventory')
@@ -401,22 +415,12 @@ const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, 
 
         if (stockError) throw stockError;
 
-        // 4. Update local state
-        setInventory(prev => prev!.map(item => 
-            item.id === itemToReturn.id ? { ...item, stock: newStockLevel } : item
-        ));
-        
-        const newUiSale: Sale = { ...newSale, paymentMethod: newTransaction.payment_method, date: newTransaction.date };
-        const newUiTransaction: Transaction = { ...newTransaction, items: [newUiSale] };
-
-        setSales(prev => [newUiSale, ...(prev || [])]);
-        setTransactions(prev => [newUiTransaction, ...(prev || [])]);
+        await fetchData(user.id);
 
     } catch (error) {
-        console.error("[processStandaloneReturn] Error:", error);
         alert(`Failed to process return: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
-}, [user, inventory]);
+}, [user, inventory, fetchData]);
 
 
   const addInventoryItem = useCallback(
@@ -432,42 +436,59 @@ const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, 
         console.error('Error adding inventory item:', error);
         return null;
       } else {
-        setInventory((prev) => (prev ? [newItem, ...prev] : [newItem]));
+        await fetchData(user.id);
         return newItem;
       }
     },
-    [user]
+    [user, fetchData]
   );
 
   const updateInventoryItem = useCallback(
     async (updatedItem: InventoryItem) => {
-      if (!user) return;
-      const { data: newItem, error } = await supabase
-        .from('inventory')
-        .update({
-          name: updatedItem.name,
-          stock: updatedItem.stock,
-          price: updatedItem.price,
-          cost: updatedItem.cost,
-          has_gst: updatedItem.has_gst,
-          is_bundle: updatedItem.is_bundle,
-          bundle_price: updatedItem.is_bundle ? updatedItem.bundle_price : null,
-          items_per_bundle: updatedItem.is_bundle ? updatedItem.items_per_bundle : null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', updatedItem.id)
-        .select()
-        .single();
+        if (!user) return;
 
-      if (error || !newItem) {
-        console.error('Error updating inventory item:', error);
-      } else {
-        setInventory((prev) =>
-          prev ? [newItem, ...prev.filter((item) => item.id !== newItem.id)] : [newItem]
-        );
-      }
+        const newUpdatedAt = new Date().toISOString();
+        const updatedItemWithTimestamp = { ...updatedItem, updated_at: newUpdatedAt };
+
+        const updatePayload = {
+            name: updatedItemWithTimestamp.name,
+            stock: updatedItemWithTimestamp.stock,
+            price: updatedItemWithTimestamp.price,
+            cost: updatedItemWithTimestamp.cost,
+            has_gst: updatedItemWithTimestamp.has_gst,
+            is_bundle: updatedItemWithTimestamp.is_bundle,
+            bundle_price: updatedItemWithTimestamp.is_bundle ? updatedItemWithTimestamp.bundle_price : null,
+            items_per_bundle: updatedItemWithTimestamp.is_bundle ? updatedItemWithTimestamp.items_per_bundle : null,
+            updated_at: newUpdatedAt,
+        };
+        
+        try {
+            const { error } = await supabase
+                .from('inventory')
+                .update(updatePayload)
+                .eq('id', updatedItem.id)
+                .eq('user_id', user.id);
+
+            if (error) throw error;
+            
+            // FIX: Manually update the local inventory state for an instant and reliable UI update.
+            setInventory(currentInventory => {
+                if (!currentInventory) return null;
+                return currentInventory.map(item => 
+                    item.id === updatedItem.id ? updatedItemWithTimestamp : item
+                ).sort((a, b) => 
+                    new Date(b.updated_at || b.created_at).getTime() - 
+                    new Date(a.updated_at || a.created_at).getTime()
+                );
+            });
+            
+        } catch (error) {
+            console.error('Error updating inventory item:', error);
+            alert(`Failed to update item: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            if (user) await fetchData(user.id);
+        }
     },
-    [user]
+    [user, fetchData]
   );
 
   const deleteInventoryItem = useCallback(
@@ -489,6 +510,7 @@ const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, 
     inventory,
     addTransaction,
     updateSale,
+    updateTransactionPaymentMethod,
     deleteTransaction,
     processReturn,
     processStandaloneReturn,

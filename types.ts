@@ -1,3 +1,4 @@
+// FIX: Removed a self-import of 'Page' that was causing a declaration conflict.
 export enum Page {
     Dashboard = 'DASHBOARD',
     Sales = 'SALES',
@@ -10,9 +11,11 @@ export interface Transaction {
     id: string;
     user_id: string;
     total_price: number;
-    payment_method: 'Online' | 'Offline';
+    payment_method: 'Online' | 'Offline' | 'On Credit';
     date: string; // ISO string
     items: Sale[];
+    customer_name?: string;
+    customer_phone?: string;
 }
 
 export interface Sale {
@@ -23,7 +26,7 @@ export interface Sale {
     quantity: number;
     totalPrice: number;
     date: string; // This is now sourced from the parent transaction
-    paymentMethod: 'Online' | 'Offline'; // This is now sourced from the parent transaction
+    paymentMethod: 'Online' | 'Offline' | 'On Credit'; // This is now sourced from the parent transaction
     has_gst?: boolean;
     itemCostAtSale?: number;
     transaction_id?: string;
