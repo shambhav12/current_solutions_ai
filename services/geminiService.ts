@@ -1,7 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { InventoryItem, Sale, SalesPrediction, InventoryInsight } from "../types";
+import { GEMINI_API_KEY } from "../config";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// The API key is obtained from the config file.
+// For local development, this is read from env.ts.
+if (!GEMINI_API_KEY) {
+    throw new Error("A Gemini API key is not configured for this environment. Please ensure the GEMINI_API_KEY is set in your config file (env.ts).");
+}
+
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 const generateContent = async (prompt: string, schema: any) => {
     const response = await ai.models.generateContent({
