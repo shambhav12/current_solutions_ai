@@ -720,7 +720,7 @@ const TransactionCard: React.FC<{ transaction: Transaction; onDelete: () => void
 
 
 const Sales: React.FC = () => {
-    const { transactions, deleteTransaction, addTransaction, processReturn, inventory, updateTransactionPaymentMethod } = useContext(ShopContext);
+    const { transactions, deleteTransaction, addTransaction, processReturn, inventory } = useContext(ShopContext);
     const { dateFilter, gstFilter, paymentFilter, bundleFilter, activeFilterCount } = useFilters();
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -863,7 +863,28 @@ const Sales: React.FC = () => {
     
     const handleSettlePayment = async (newPaymentMethod: 'Online' | 'Offline') => {
         if (transactionToSettle) {
-            await updateTransactionPaymentMethod(transactionToSettle.id, newPaymentMethod);
+            // Re-create the transaction items in the format needed by addTransaction
+            const transactionItems: CartItemForTransaction[] = transactionToSettle.items.map(item => {
+                const invItem = inventoryMap.get(item.inventoryItemId);
+                return {
+                    inventoryItemId: item.inventoryItemId,
+                    productName: item.productName,
+                    quantity: item.quantity,
+                    totalPrice: item.totalPrice,
+                    sale_type: item.sale_type || 'loose',
+                    items_per_bundle: invItem?.items_per_bundle || 1,
+                };
+            });
+    
+            const customerInfo = {
+                name: transactionToSettle.customer_name,
+                phone: transactionToSettle.customer_phone,
+            };
+            
+            // Use the same reliable "delete and recreate" logic as the edit flow
+            await deleteTransaction(transactionToSettle.id);
+            await addTransaction(transactionItems, newPaymentMethod, customerInfo);
+    
             setTransactionToSettle(null);
         }
     };

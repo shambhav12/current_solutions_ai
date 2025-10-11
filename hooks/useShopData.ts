@@ -212,65 +212,6 @@ export const useShopData = () => {
     []
   );
 
-    const updateTransactionPaymentMethod = useCallback(
-    async (transactionId: string, newPaymentMethod: 'Online' | 'Offline') => {
-        if (!user) return;
-
-        try {
-            const { error: transactionError } = await supabase
-                .from('transactions')
-                .update({ payment_method: newPaymentMethod })
-                .eq('id', transactionId)
-                .eq('user_id', user.id);
-
-            if (transactionError) throw transactionError;
-
-            const { error: salesError } = await supabase
-                .from('sales')
-                .update({ payment_method: newPaymentMethod })
-                .eq('transaction_id', transactionId)
-                .eq('user_id', user.id);
-
-            if (salesError) throw salesError;
-
-            // FIX: Manually update the local state to avoid re-fetching and ensure
-            // the UI updates instantly and reliably.
-            setTransactions(currentTransactions => {
-                if (!currentTransactions) return null;
-                return currentTransactions.map(t => {
-                    if (t.id === transactionId) {
-                        return {
-                            ...t,
-                            payment_method: newPaymentMethod,
-                            items: t.items.map(item => ({
-                                ...item,
-                                paymentMethod: newPaymentMethod,
-                            }))
-                        };
-                    }
-                    return t;
-                });
-            });
-
-            setSales(currentSales => {
-                if (!currentSales) return null;
-                return currentSales.map(s => {
-                    if (s.transaction_id === transactionId) {
-                        return { ...s, paymentMethod: newPaymentMethod };
-                    }
-                    return s;
-                });
-            });
-
-        } catch (error) {
-            alert(`Failed to update payment method: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            // If something goes wrong, re-fetch to ensure data consistency.
-            if (user) await fetchData(user.id);
-        }
-    },
-    [user, fetchData]
-  );
-
   const deleteTransaction = useCallback(
     async (transactionId: string) => {
         if (!user || !inventory || !sales) return;
@@ -510,7 +451,6 @@ const processStandaloneReturn = useCallback(async (itemToReturn: InventoryItem, 
     inventory,
     addTransaction,
     updateSale,
-    updateTransactionPaymentMethod,
     deleteTransaction,
     processReturn,
     processStandaloneReturn,
