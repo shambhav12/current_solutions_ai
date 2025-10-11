@@ -39,6 +39,7 @@ const ScanBill: React.FC = () => {
             const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
+                videoRef.current.play();
             }
             setIsCameraOn(true);
             setError(null);

@@ -60,7 +60,7 @@ export const extractSaleDataFromImage = async (base64Image: string) => {
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: { parts: [imagePart, textPart] },
+        contents: [{ parts: [imagePart, textPart] }],
         config: {
             responseMimeType: 'application/json',
             responseSchema: schema,
