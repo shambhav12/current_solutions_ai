@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Page, Sale, InventoryItem, Transaction, CartItemForTransaction } from './types';
 import { useShopData } from './hooks/useShopData';
 import { useAuth } from './AuthContext';
-import { DashboardIcon, SalesIcon, InventoryIcon, InsightsIcon, MenuIcon, CloseIcon, ReturnIcon } from './components/Icons';
+import { DashboardIcon, SalesIcon, InventoryIcon, InsightsIcon, MenuIcon, CloseIcon, ReturnIcon, CameraIcon } from './components/Icons';
 import Dashboard from './components/Dashboard';
 import Sales from './components/Sales';
 import Inventory from './components/Inventory';
@@ -12,6 +12,7 @@ import LoginScreen from './components/LoginScreen';
 import UserMenu from './components/UserMenu';
 import { FilterProvider } from './FilterContext';
 import Returns from './components/Returns';
+import ScanBill from './components/ScanBill';
 
 export const ShopContext = React.createContext<{
   sales: Sale[] | null;
@@ -26,6 +27,7 @@ export const ShopContext = React.createContext<{
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<InventoryItem | null>;
   updateInventoryItem: (item: InventoryItem) => void;
   deleteInventoryItem: (itemId: string) => void;
+  setCurrentPage: (page: Page) => void;
 }>({
   sales: null,
   transactions: null,
@@ -38,6 +40,7 @@ export const ShopContext = React.createContext<{
   addInventoryItem: async () => null,
   updateInventoryItem: () => {},
   deleteInventoryItem: () => {},
+  setCurrentPage: () => {},
 });
 
 const App: React.FC = () => {
@@ -88,6 +91,7 @@ const App: React.FC = () => {
       addInventoryItem,
       updateInventoryItem,
       deleteInventoryItem,
+      setCurrentPage,
     }),
     [sales, transactions, inventory, addTransaction, updateSale, deleteTransaction, processReturn, processStandaloneReturn, addInventoryItem, updateInventoryItem, deleteInventoryItem]
   );
@@ -98,6 +102,8 @@ const App: React.FC = () => {
         return <Dashboard />;
       case Page.Sales:
         return <Sales />;
+      case Page.ScanBill:
+        return <ScanBill />;
       case Page.Returns:
         return <Returns />;
       case Page.Inventory:
@@ -145,6 +151,7 @@ const App: React.FC = () => {
                 {[
                   { page: Page.Dashboard, label: 'Dashboard', icon: <DashboardIcon /> },
                   { page: Page.Sales, label: 'Sales', icon: <SalesIcon /> },
+                  { page: Page.ScanBill, label: 'Scan Bill', icon: <CameraIcon /> },
                   { page: Page.Returns, label: 'Returns', icon: <ReturnIcon /> },
                   { page: Page.Inventory, label: 'Inventory', icon: <InventoryIcon /> },
                   { page: Page.Insights, label: 'AI Insights', icon: <InsightsIcon /> },

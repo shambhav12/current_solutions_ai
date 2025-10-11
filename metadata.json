@@ -1,5 +1,7 @@
 {
   "name": "Current Solutions AI",
   "description": "An intelligent dashboard for an electric shop to track sales, manage inventory, and get AI-powered predictions and insights.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

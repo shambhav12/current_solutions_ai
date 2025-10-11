@@ -1,9 +1,9 @@
 import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { ShopContext } from '../App';
-import { Sale, Transaction, InventoryItem, CartItemForTransaction } from '../types';
+import { Sale, Transaction, InventoryItem, CartItemForTransaction, Page } from '../types';
 import Modal from './ui/Modal';
 import ConfirmationModal from './ui/ConfirmationModal';
-import { PlusIcon, DeleteIcon, EditIcon, ReturnIcon, CreditIcon, FilterIcon, InvoiceIcon } from './Icons';
+import { PlusIcon, DeleteIcon, EditIcon, ReturnIcon, CreditIcon, FilterIcon, InvoiceIcon, CameraIcon } from './Icons';
 import { useFilters, GstFilter, PaymentFilter, BundleFilter } from '../FilterContext';
 import DateFilterComponent from './ui/DateFilter';
 import { useDebounce } from '../hooks/useDebounce';
@@ -12,8 +12,8 @@ import { generateInvoicePDF } from '../utils/generateInvoice';
 interface CartItem {
     inventoryItemId: string;
     productName: string;
-    quantity: number;
-    pricePerUnit: number;
+    quantity: string;
+    pricePerUnit: string;
     totalPrice: number;
     stock: number;
     costPerUnit: number;
@@ -89,8 +89,8 @@ const SalesForm: React.FC<{
                 return {
                     inventoryItemId: invItem.id,
                     productName: invItem.name,
-                    quantity: saleItem.quantity,
-                    pricePerUnit: pricePerUnit,
+                    quantity: String(saleItem.quantity),
+                    pricePerUnit: String(pricePerUnit.toFixed(2)),
                     totalPrice: saleItem.totalPrice,
                     stock: originalStock,
                     costPerUnit: invItem.cost,
@@ -207,8 +207,8 @@ const SalesForm: React.FC<{
              itemToAdd = {
                 inventoryItemId: newInventoryItem.id,
                 productName: newInventoryItem.name,
-                quantity: numQuantity,
-                pricePerUnit: newInventoryItem.price,
+                quantity: String(numQuantity),
+                pricePerUnit: String(newInventoryItem.price.toFixed(2)),
                 totalPrice: newInventoryItem.price * numQuantity,
                 stock: newInventoryItem.stock,
                 costPerUnit: newInventoryItem.cost,
@@ -230,8 +230,8 @@ const SalesForm: React.FC<{
             itemToAdd = {
                 inventoryItemId: currentItem.id,
                 productName: currentItem.name,
-                quantity: numQuantity,
-                pricePerUnit: numPrice,
+                quantity: String(numQuantity),
+                pricePerUnit: String(numPrice.toFixed(2)),
                 totalPrice: numPrice * numQuantity,
                 stock: currentItem.stock,
                 costPerUnit: currentItem.cost,
@@ -250,49 +250,57 @@ const SalesForm: React.FC<{
         resetCurrentItemForm();
     };
     
-    // FIX: Implemented robust validation to prevent NaN values from entering the state.
-    // This was the primary cause of the "Bad Request" error.
     const handleUpdateCartItem = (index: number, field: 'quantity' | 'pricePerUnit', value: string) => {
         const updatedCart = [...cart];
         const item = updatedCart[index];
-
+    
         if (field === 'quantity') {
-            const numQuantity = parseInt(value, 10);
-            // If input is invalid (e.g., "abc") or less than 1, default to 1 to prevent NaN state.
-            if (isNaN(numQuantity) || numQuantity < 1) {
-                item.quantity = 1;
-            } else {
-                const unitsNeeded = item.sale_type === 'bundle' ? numQuantity * item.items_per_bundle : numQuantity;
-                if (unitsNeeded > item.stock) {
-                    const maxQty = item.sale_type === 'bundle' ? Math.floor(item.stock / item.items_per_bundle) : item.stock;
-                    item.quantity = Math.max(1, maxQty);
-                    alert(`Not enough stock. Quantity has been adjusted to the maximum available (${item.quantity}).`);
+            // Only allow empty string or positive integers
+            if (value === '' || /^\d+$/.test(value)) {
+                const numQuantity = parseInt(value, 10);
+                if (value !== '' && !isNaN(numQuantity)) {
+                    const unitsNeeded = item.sale_type === 'bundle' ? numQuantity * item.items_per_bundle : numQuantity;
+                    if (unitsNeeded > item.stock) {
+                        const maxQty = item.sale_type === 'bundle' ? Math.floor(item.stock / item.items_per_bundle) : item.stock;
+                        const finalQty = String(Math.max(1, maxQty));
+                        item.quantity = finalQty;
+                        alert(`Not enough stock. Quantity has been adjusted to the maximum available (${finalQty}).`);
+                    } else {
+                        item.quantity = value;
+                    }
                 } else {
-                    item.quantity = numQuantity;
+                    item.quantity = value; // Allow empty string
                 }
             }
         }
-
+    
         if (field === 'pricePerUnit') {
-            const numPrice = parseFloat(value);
-            // If input is invalid or negative, default to 0 to prevent NaN state.
-            if (isNaN(numPrice) || numPrice < 0) {
-                item.pricePerUnit = 0;
-            } else {
-                item.pricePerUnit = numPrice;
+            // Allow empty string or positive decimals
+            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                item.pricePerUnit = value;
             }
         }
-
-        item.totalPrice = item.quantity * item.pricePerUnit;
+        
+        // Recalculate total price
+        item.totalPrice = (Number(item.quantity) || 0) * (Number(item.pricePerUnit) || 0);
+    
         setCart(updatedCart);
     };
 
     const handlePriceValidation = (index: number) => {
         const item = cart[index];
+        const numPrice = Number(item.pricePerUnit);
         const costOfSaleUnit = item.sale_type === 'bundle' ? (item.costPerUnit * item.items_per_bundle) : item.costPerUnit;
-        if (item.pricePerUnit < costOfSaleUnit) {
-            alert(`Selling price (₹${item.pricePerUnit.toFixed(2)}) cannot be less than the item's cost (₹${costOfSaleUnit.toFixed(2)}). Reverting to cost price.`);
-            handleUpdateCartItem(index, 'pricePerUnit', costOfSaleUnit.toFixed(2));
+
+        if (item.pricePerUnit === '' || isNaN(numPrice) || numPrice < costOfSaleUnit) {
+            const newPrice = costOfSaleUnit.toFixed(2);
+            if (!isNaN(numPrice) && numPrice < costOfSaleUnit) {
+                alert(`Selling price (₹${numPrice.toFixed(2)}) cannot be less than the item's cost (₹${costOfSaleUnit.toFixed(2)}). Reverting to cost price.`);
+            }
+            handleUpdateCartItem(index, 'pricePerUnit', newPrice);
+        } else {
+            // Also format to 2 decimal places on blur
+            handleUpdateCartItem(index, 'pricePerUnit', numPrice.toFixed(2));
         }
     };
 
@@ -307,13 +315,15 @@ const SalesForm: React.FC<{
             return;
         }
         
-        // FIX: Added a comprehensive final validation loop before submission.
         for (const [index, item] of cart.entries()) {
-             if (isNaN(item.quantity) || item.quantity <= 0 || !Number.isInteger(item.quantity)) {
+             const numQuantity = Number(item.quantity);
+             const numPrice = Number(item.pricePerUnit);
+
+             if (isNaN(numQuantity) || !Number.isInteger(numQuantity) || numQuantity <= 0) {
                 alert(`Item #${index + 1} (${item.productName}) has an invalid quantity. Please enter a positive whole number.`);
                 return;
             }
-            if (isNaN(item.pricePerUnit) || item.pricePerUnit < 0) {
+            if (isNaN(numPrice) || numPrice < 0) {
                 alert(`Item #${index + 1} (${item.productName}) has an invalid price. Please enter a non-negative number.`);
                 return;
             }
@@ -322,7 +332,7 @@ const SalesForm: React.FC<{
                 return;
             }
              const costOfSaleUnit = item.sale_type === 'bundle' ? (item.costPerUnit * item.items_per_bundle) : item.costPerUnit;
-             if (item.pricePerUnit < costOfSaleUnit) {
+             if (numPrice < costOfSaleUnit) {
                 alert(`The price for ${item.productName} is below its cost (₹${costOfSaleUnit.toFixed(2)}). Please correct it before submitting.`);
                 return;
              }
@@ -331,7 +341,7 @@ const SalesForm: React.FC<{
         const transactionItems: CartItemForTransaction[] = cart.map(ci => ({
             inventoryItemId: ci.inventoryItemId,
             productName: ci.productName,
-            quantity: ci.quantity,
+            quantity: Number(ci.quantity),
             totalPrice: ci.totalPrice,
             sale_type: ci.sale_type,
             items_per_bundle: ci.items_per_bundle,
@@ -487,7 +497,7 @@ const SalesForm: React.FC<{
                                            <label className="block text-xs text-text-muted mb-1">Price</label>
                                            <div className="relative">
                                                <span className="absolute inset-y-0 left-0 flex items-center pl-2 text-text-muted text-sm">₹</span>
-                                               <input type="number" value={item.pricePerUnit.toFixed(2)} onBlur={() => handlePriceValidation(index)} onChange={(e) => handleUpdateCartItem(index, 'pricePerUnit', e.target.value)} min="0" step="0.01" className="w-full bg-surface border border-border rounded-md py-1 pl-5 pr-2 text-sm text-text-main"/>
+                                               <input type="text" value={item.pricePerUnit} onBlur={() => handlePriceValidation(index)} onChange={(e) => handleUpdateCartItem(index, 'pricePerUnit', e.target.value)} className="w-full bg-surface border border-border rounded-md py-1 pl-5 pr-2 text-sm text-text-main"/>
                                            </div>
                                        </div>
                                        <div className="self-end pb-0.5">
@@ -509,7 +519,7 @@ const SalesForm: React.FC<{
                                    <div className="sm:col-span-2">
                                        <div className="relative">
                                            <span className="absolute inset-y-0 left-0 flex items-center pl-2 text-text-muted text-sm">₹</span>
-                                           <input type="number" value={item.pricePerUnit.toFixed(2)} onBlur={() => handlePriceValidation(index)} onChange={(e) => handleUpdateCartItem(index, 'pricePerUnit', e.target.value)} min="0" step="0.01" className="w-full bg-surface border border-border rounded-md py-1 pl-5 pr-2 text-sm text-text-main"/>
+                                           <input type="text" value={item.pricePerUnit} onBlur={() => handlePriceValidation(index)} onChange={(e) => handleUpdateCartItem(index, 'pricePerUnit', e.target.value)} className="w-full bg-surface border border-border rounded-md py-1 pl-5 pr-2 text-sm text-text-main"/>
                                        </div>
                                    </div>
                                    <div className="sm:col-span-2 text-right">
@@ -728,7 +738,7 @@ const TransactionCard: React.FC<{ transaction: Transaction; onDelete: () => void
 
 
 const Sales: React.FC = () => {
-    const { transactions, deleteTransaction, addTransaction, processReturn, inventory } = useContext(ShopContext);
+    const { transactions, deleteTransaction, addTransaction, processReturn, inventory, setCurrentPage } = useContext(ShopContext);
     const { dateFilter, gstFilter, paymentFilter, bundleFilter, activeFilterCount } = useFilters();
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -907,10 +917,16 @@ const Sales: React.FC = () => {
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <h2 className="text-3xl font-bold text-text-main">Sales Records</h2>
-                <button onClick={() => handleOpenModal()} className="hidden md:inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors flex-shrink-0">
-                    <PlusIcon />
-                    <span className="ml-2">New Sale</span>
-                </button>
+                <div className="hidden md:flex items-center gap-2">
+                    <button onClick={() => setCurrentPage(Page.ScanBill)} className="inline-flex items-center justify-center px-4 py-2 border border-primary text-sm font-medium rounded-md shadow-sm text-primary bg-primary/10 hover:bg-primary/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors flex-shrink-0">
+                        <CameraIcon />
+                        <span className="ml-2">Scan Bill</span>
+                    </button>
+                    <button onClick={() => handleOpenModal()} className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors flex-shrink-0">
+                        <PlusIcon />
+                        <span className="ml-2">New Sale</span>
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1085,13 +1101,22 @@ const Sales: React.FC = () => {
                 </div>
             </div>
 
-            <button
-                onClick={() => handleOpenModal()}
-                className="md:hidden fixed bottom-6 right-6 bg-primary text-white p-4 rounded-full shadow-lg z-20 flex items-center justify-center hover:bg-primary-focus transition-transform duration-200 active:scale-95"
-                aria-label="Record New Sale"
-            >
-                <PlusIcon />
-            </button>
+            <div className="fixed bottom-6 right-6 z-20 flex flex-col gap-4 md:hidden">
+                <button
+                    onClick={() => setCurrentPage(Page.ScanBill)}
+                    className="bg-info text-white p-3 rounded-full shadow-lg flex items-center justify-center hover:bg-blue-500 transition-transform duration-200 active:scale-95"
+                    aria-label="Scan Bill"
+                >
+                    <CameraIcon />
+                </button>
+                 <button
+                    onClick={() => handleOpenModal()}
+                    className="bg-primary text-white p-4 rounded-full shadow-lg flex items-center justify-center hover:bg-primary-focus transition-transform duration-200 active:scale-95"
+                    aria-label="Record New Sale"
+                >
+                    <PlusIcon />
+                </button>
+            </div>
         </div>
     );
 };

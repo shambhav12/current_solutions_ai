@@ -1,11 +1,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { InventoryItem, Sale, SalesPrediction, InventoryInsight } from "../types";
 
-const generateContent = async (prompt: string, schema: any) => {
-    // The API key is sourced from a secure environment variable as per project guidelines.
-    // This variable is assumed to be configured in the deployment environment.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+const generateContent = async (prompt: string, schema: any) => {
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
@@ -18,6 +16,53 @@ const generateContent = async (prompt: string, schema: any) => {
     const responseText = response.text;
     return JSON.parse(responseText);
 };
+
+export const extractSaleDataFromImage = async (base64Image: string) => {
+    const imagePart = {
+        inlineData: {
+            mimeType: 'image/jpeg',
+            data: base64Image,
+        },
+    };
+
+    const textPart = {
+        text: `You are an expert data entry clerk specializing in reading handwritten and printed receipts from an electrical shop. Analyze the provided image of a bill. Extract all line items, including the product name, quantity, and total price for each item. Also, try to identify the grand total, payment method (if mentioned, otherwise default to 'Offline'), and the date of the transaction. For product names, be concise. For quantities, default to 1 if not specified. For prices, extract the total price for the line item. Structure the output as a JSON object matching the provided schema.`,
+    };
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            date: { type: Type.STRING, description: 'The date of the transaction in YYYY-MM-DD format. If not found, use today\'s date.' },
+            paymentMethod: { type: Type.STRING, description: 'The payment method (e.g., "Cash", "Card", "Online", "Credit"). Default to "Offline" if not found.' },
+            items: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        productName: { type: Type.STRING, description: 'The name of the product.' },
+                        quantity: { type: Type.NUMBER, description: 'The quantity of the product sold. Default to 1 if not specified.' },
+                        totalPrice: { type: Type.NUMBER, description: 'The total price for this line item.' },
+                    },
+                    required: ['productName', 'quantity', 'totalPrice'],
+                },
+            },
+            grandTotal: { type: Type.NUMBER, description: 'The final total amount on the receipt.' },
+        },
+        required: ['date', 'items'],
+    };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, textPart] },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: schema,
+        }
+    });
+
+    const responseText = response.text;
+    return JSON.parse(responseText);
+}
 
 export const getSalesPredictions = async (salesData: Sale[]): Promise<{ predictions: SalesPrediction[] }> => {
     const prompt = `You are a senior business analyst for a small electric retail shop. Based on the following daily sales data in JSON format, provide a 7-day sales forecast.
