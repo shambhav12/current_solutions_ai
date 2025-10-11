@@ -182,6 +182,10 @@ const SalesForm: React.FC<{
              if (inventory && inventory.some(item => item.name.trim().toLowerCase() === trimmedName.toLowerCase())) {
                 alert('An item with this name already exists in the inventory.'); return;
              }
+             if (cart.some(cartItem => cartItem.productName.trim().toLowerCase() === trimmedName.toLowerCase())) {
+                 alert(`An item named "${trimmedName}" is already in the cart. Please choose a different name.`);
+                 return;
+             }
              if (newItemIsBundle) {
                 if(isNaN(numNewBundlePrice) || numNewBundlePrice <= 0) { alert('Bundle price must be a positive number.'); return; }
                 if(isNaN(numNewItemsPerBundle) || !Number.isInteger(numNewItemsPerBundle) || numNewItemsPerBundle <= 1) { alert('Items per bundle must be a whole number greater than 1.'); return; }
@@ -213,6 +217,10 @@ const SalesForm: React.FC<{
                 is_bundle_item: newInventoryItem.is_bundle || false,
             };
         } else if (currentItem) {
+            if (cart.some(cartItem => cartItem.inventoryItemId === currentItem.id)) {
+                alert(`"${currentItem.name}" is already in the cart. You can edit its quantity and price in the list below.`);
+                return;
+            }
             const costOfSaleUnit = saleType === 'bundle' ? (currentItem.cost * (currentItem.items_per_bundle || 1)) : currentItem.cost;
             const unitsNeeded = saleType === 'bundle' ? numQuantity * (currentItem.items_per_bundle || 1) : numQuantity;
             
