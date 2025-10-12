@@ -10,18 +10,31 @@ if (!GEMINI_API_KEY) {
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
+const callGeminiAPI = async (payload: any) => {
+    try {
+        const response = await ai.models.generateContent(payload);
+        const responseText = response.text;
+        return JSON.parse(responseText);
+    } catch (error) {
+        console.error("Gemini API Error:", error);
+        if (error instanceof Error && (error.message.includes('429') || error.message.toLowerCase().includes('quota'))) {
+            throw new Error("You've reached the daily free limit for AI features. Please try again tomorrow.");
+        }
+        throw new Error(`AI service failed: ${error instanceof Error ? error.message : "An unknown error occurred."}`);
+    }
+};
+
+
 const generateContent = async (prompt: string, schema: any) => {
-    const response = await ai.models.generateContent({
+    const payload = {
         model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
             responseMimeType: 'application/json',
             responseSchema: schema,
         }
-    });
-    
-    const responseText = response.text;
-    return JSON.parse(responseText);
+    };
+    return callGeminiAPI(payload);
 };
 
 export const extractSaleDataFromImage = async (base64Image: string) => {
@@ -58,17 +71,15 @@ export const extractSaleDataFromImage = async (base64Image: string) => {
         required: ['date', 'items'],
     };
 
-    const response = await ai.models.generateContent({
+    const payload = {
         model: 'gemini-2.5-flash',
         contents: { parts: [imagePart, textPart] },
         config: {
             responseMimeType: 'application/json',
             responseSchema: schema,
         }
-    });
-
-    const responseText = response.text;
-    return JSON.parse(responseText);
+    };
+    return callGeminiAPI(payload);
 }
 
 export const extractInventoryDataFromImage = async (base64Image: string) => {
@@ -102,17 +113,15 @@ export const extractInventoryDataFromImage = async (base64Image: string) => {
         required: ['items'],
     };
 
-    const response = await ai.models.generateContent({
+    const payload = {
         model: 'gemini-2.5-flash',
         contents: { parts: [imagePart, textPart] },
         config: {
             responseMimeType: 'application/json',
             responseSchema: schema,
         }
-    });
-
-    const responseText = response.text;
-    return JSON.parse(responseText);
+    };
+    return callGeminiAPI(payload);
 };
 
 export const getSalesPredictions = async (salesData: Sale[]): Promise<{ predictions: SalesPrediction[] }> => {
