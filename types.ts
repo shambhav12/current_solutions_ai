@@ -80,4 +80,7 @@ export interface User {
     name: string;
     email: string;
     picture: string;
+    phone?: string;
+    signature_url?: string;
+    shop_name?: string;
 }

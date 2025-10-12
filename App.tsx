@@ -145,7 +145,7 @@ const App: React.FC = () => {
           >
             <div className="overflow-y-auto h-full">
               <div className="flex items-center h-16 px-4 border-b border-border">
-                <h1 className="text-xl font-bold text-text-main">Current Solutions</h1>
+                <h1 className="text-xl font-bold text-text-main">{user?.shop_name || 'Electricals'}</h1>
               </div>
               <nav className="flex-grow p-4 space-y-2">
                 {[
@@ -188,7 +188,7 @@ const App: React.FC = () => {
                 </button>
               </div>
               <div className="flex-1 text-center md:hidden">
-                <h1 className="text-xl font-bold text-text-main">Current Solutions</h1>
+                <h1 className="text-xl font-bold text-text-main">{user?.shop_name || 'Electricals'}</h1>
               </div>
               <div className="flex items-center space-x-4">
                 <UserMenu onSignOut={handleSignOut} />

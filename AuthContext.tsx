@@ -6,6 +6,7 @@ interface AuthContextType {
     user: User | null;
     signOut: () => void;
     isLoading: boolean;
+    updateUserMetadata: (data: { phone?: string; signature_url?: string; shop_name?: string; }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +25,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     name: session.user.user_metadata.full_name || session.user.user_metadata.name,
                     email: session.user.email!,
                     picture: session.user.user_metadata.avatar_url || session.user.user_metadata.picture,
+                    phone: session.user.user_metadata.phone,
+                    signature_url: session.user.user_metadata.signature_url,
+                    shop_name: session.user.user_metadata.shop_name,
                 });
             } else {
                 setUser(null);
@@ -41,8 +45,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(null);
     };
 
+    const updateUserMetadata = async (data: { phone?: string; signature_url?: string; shop_name?: string; }) => {
+        if (!user) return;
+
+        const currentMetadata = (await supabase.auth.getUser()).data.user?.user_metadata || {};
+        
+        const { data: updatedUserData, error } = await supabase.auth.updateUser({
+            data: { ...currentMetadata, ...data }
+        });
+
+        if (error) {
+            throw error;
+        }
+
+        if (updatedUserData.user) {
+            setUser(prevUser => {
+                if (!prevUser) return null;
+                return {
+                    ...prevUser,
+                    phone: updatedUserData.user!.user_metadata.phone,
+                    signature_url: updatedUserData.user!.user_metadata.signature_url,
+                    shop_name: updatedUserData.user!.user_metadata.shop_name,
+                };
+            });
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, signOut, isLoading }}>
+        <AuthContext.Provider value={{ user, signOut, isLoading, updateUserMetadata }}>
             {children}
         </AuthContext.Provider>
     );

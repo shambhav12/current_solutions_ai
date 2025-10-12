@@ -1,6 +1,6 @@
 import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { ShopContext } from '../App';
-import { Sale, Transaction, InventoryItem, CartItemForTransaction, Page } from '../types';
+import { Sale, Transaction, InventoryItem, CartItemForTransaction, Page, User } from '../types';
 import Modal from './ui/Modal';
 import ConfirmationModal from './ui/ConfirmationModal';
 import { PlusIcon, DeleteIcon, EditIcon, ReturnIcon, CreditIcon, FilterIcon, InvoiceIcon, CameraIcon } from './Icons';
@@ -8,6 +8,7 @@ import { useFilters, GstFilter, PaymentFilter, BundleFilter, ReturnFilter } from
 import DateFilterComponent from './ui/DateFilter';
 import { useDebounce } from '../hooks/useDebounce';
 import { generateInvoicePDF } from '../utils/generateInvoice';
+import { useAuth } from '../AuthContext';
 
 interface CartItem {
     inventoryItemId: string;
@@ -748,6 +749,7 @@ const TransactionCard: React.FC<{ transaction: Transaction; onDelete: () => void
 
 const Sales: React.FC = () => {
     const { transactions, deleteTransaction, addTransaction, processReturn, inventory, setCurrentPage } = useContext(ShopContext);
+    const { user } = useAuth();
     const { dateFilter, gstFilter, paymentFilter, bundleFilter, returnFilter, activeFilterCount } = useFilters();
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1022,7 +1024,7 @@ const Sales: React.FC = () => {
                             onEdit={() => handleOpenModal(t)}
                             onReturn={setSaleToReturn}
                             onSettle={() => setTransactionToSettle(t)}
-                            onDownload={() => generateInvoicePDF(t, inventoryMap)}
+                            onDownload={() => generateInvoicePDF(t, inventoryMap, user)}
                             inventoryMap={inventoryMap}
                         />
                     )
@@ -1097,7 +1099,7 @@ const Sales: React.FC = () => {
                                     <td className="px-4 py-4 whitespace-nowrap text-sm text-text-muted align-top">{new Date(t.date).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                                     <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium align-top">
                                         <div className="flex justify-end space-x-2">
-                                            <button onClick={() => generateInvoicePDF(t, inventoryMap)} className="text-info hover:opacity-80 p-1 rounded-full hover:bg-surface-hover transition-colors">
+                                            <button onClick={() => generateInvoicePDF(t, inventoryMap, user)} className="text-info hover:opacity-80 p-1 rounded-full hover:bg-surface-hover transition-colors">
                                                 <InvoiceIcon />
                                             </button>
                                             {t.payment_method === 'On Credit' ? (
