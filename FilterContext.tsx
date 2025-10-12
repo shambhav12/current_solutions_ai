@@ -10,8 +10,9 @@ export interface DateFilter {
 }
 
 export type GstFilter = 'all' | 'gst' | 'non-gst';
-export type PaymentFilter = 'all' | 'paid' | 'credit';
+export type PaymentFilter = 'all' | 'online' | 'offline' | 'credit';
 export type BundleFilter = 'all' | 'bundle' | 'non-bundle';
+export type ReturnFilter = 'all' | 'withReturns';
 
 interface FilterContextType {
     dateFilter: DateFilter;
@@ -22,6 +23,8 @@ interface FilterContextType {
     setPaymentFilter: (filter: PaymentFilter) => void;
     bundleFilter: BundleFilter;
     setBundleFilter: (filter: BundleFilter) => void;
+    returnFilter: ReturnFilter;
+    setReturnFilter: (filter: ReturnFilter) => void;
     resetFilters: () => void;
     activeFilterCount: number;
 }
@@ -35,12 +38,14 @@ export const FilterProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     const [gstFilter, setGstFilter] = useState<GstFilter>('all');
     const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('all');
     const [bundleFilter, setBundleFilter] = useState<BundleFilter>('all');
+    const [returnFilter, setReturnFilter] = useState<ReturnFilter>('all');
 
     const resetFilters = () => {
         setDateFilter(initialDateFilter);
         setGstFilter('all');
         setPaymentFilter('all');
         setBundleFilter('all');
+        setReturnFilter('all');
     };
 
     const activeFilterCount = useMemo(() => {
@@ -50,8 +55,9 @@ export const FilterProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         if (gstFilter !== 'all') count++;
         if (paymentFilter !== 'all') count++;
         if (bundleFilter !== 'all') count++;
+        if (returnFilter !== 'all') count++;
         return count;
-    }, [dateFilter.type, gstFilter, paymentFilter, bundleFilter]);
+    }, [dateFilter.type, gstFilter, paymentFilter, bundleFilter, returnFilter]);
 
     const value = useMemo(() => ({
         dateFilter,
@@ -62,9 +68,11 @@ export const FilterProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setPaymentFilter,
         bundleFilter,
         setBundleFilter,
+        returnFilter,
+        setReturnFilter,
         resetFilters,
         activeFilterCount,
-    }), [dateFilter, gstFilter, paymentFilter, bundleFilter]);
+    }), [dateFilter, gstFilter, paymentFilter, bundleFilter, returnFilter]);
 
     return (
         <FilterContext.Provider value={value}>

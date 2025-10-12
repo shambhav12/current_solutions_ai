@@ -4,7 +4,7 @@ import { Sale, Transaction, InventoryItem, CartItemForTransaction, Page } from '
 import Modal from './ui/Modal';
 import ConfirmationModal from './ui/ConfirmationModal';
 import { PlusIcon, DeleteIcon, EditIcon, ReturnIcon, CreditIcon, FilterIcon, InvoiceIcon, CameraIcon } from './Icons';
-import { useFilters, GstFilter, PaymentFilter, BundleFilter } from '../FilterContext';
+import { useFilters, GstFilter, PaymentFilter, BundleFilter, ReturnFilter } from '../FilterContext';
 import DateFilterComponent from './ui/DateFilter';
 import { useDebounce } from '../hooks/useDebounce';
 import { generateInvoicePDF } from '../utils/generateInvoice';
@@ -589,6 +589,7 @@ const FilterPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         gstFilter, setGstFilter,
         paymentFilter, setPaymentFilter,
         bundleFilter, setBundleFilter,
+        returnFilter, setReturnFilter,
         resetFilters
     } = useFilters();
 
@@ -612,9 +613,10 @@ const FilterPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div>
                     <label className="text-sm font-medium text-text-main">Payment Status</label>
                     <div className="mt-1 flex rounded-md shadow-sm bg-background border border-border" role="group">
-                        <button type="button" onClick={() => setPaymentFilter('all')} className={`flex-1 px-3 py-2 text-sm font-medium rounded-l-md transition-colors ${paymentFilter === 'all' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>All</button>
-                        <button type="button" onClick={() => setPaymentFilter('paid')} className={`flex-1 px-3 py-2 text-sm font-medium border-x border-border transition-colors ${paymentFilter === 'paid' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>Paid</button>
-                        <button type="button" onClick={() => setPaymentFilter('credit')} className={`flex-1 px-3 py-2 text-sm font-medium rounded-r-md transition-colors ${paymentFilter === 'credit' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>On Credit</button>
+                        <button type="button" onClick={() => setPaymentFilter('all')} className={`flex-1 px-2 py-2 text-xs font-medium rounded-l-md transition-colors ${paymentFilter === 'all' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>All</button>
+                        <button type="button" onClick={() => setPaymentFilter('online')} className={`flex-1 px-2 py-2 text-xs font-medium border-l border-border transition-colors ${paymentFilter === 'online' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>Online</button>
+                        <button type="button" onClick={() => setPaymentFilter('offline')} className={`flex-1 px-2 py-2 text-xs font-medium border-l border-border transition-colors ${paymentFilter === 'offline' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>Offline</button>
+                        <button type="button" onClick={() => setPaymentFilter('credit')} className={`flex-1 px-2 py-2 text-xs font-medium rounded-r-md border-l border-border transition-colors ${paymentFilter === 'credit' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>Credit</button>
                     </div>
                 </div>
                 <div>
@@ -623,6 +625,13 @@ const FilterPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         <button type="button" onClick={() => setGstFilter('all')} className={`flex-1 px-3 py-2 text-sm font-medium rounded-l-md transition-colors ${gstFilter === 'all' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>All</button>
                         <button type="button" onClick={() => setGstFilter('gst')} className={`flex-1 px-3 py-2 text-sm font-medium border-x border-border transition-colors ${gstFilter === 'gst' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>GST</button>
                         <button type="button" onClick={() => setGstFilter('non-gst')} className={`flex-1 px-3 py-2 text-sm font-medium rounded-r-md transition-colors ${gstFilter === 'non-gst' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>Non-GST</button>
+                    </div>
+                </div>
+                <div>
+                    <label className="text-sm font-medium text-text-main">Return Status</label>
+                    <div className="mt-1 flex rounded-md shadow-sm bg-background border border-border" role="group">
+                        <button type="button" onClick={() => setReturnFilter('all')} className={`flex-1 px-3 py-2 text-sm font-medium rounded-l-md transition-colors ${returnFilter === 'all' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>All Transactions</button>
+                        <button type="button" onClick={() => setReturnFilter('withReturns')} className={`flex-1 px-3 py-2 text-sm font-medium rounded-r-md border-l border-border transition-colors ${returnFilter === 'withReturns' ? 'bg-primary text-white' : 'text-text-main hover:bg-surface-hover'}`}>With Returns</button>
                     </div>
                 </div>
                 <div>
@@ -739,7 +748,7 @@ const TransactionCard: React.FC<{ transaction: Transaction; onDelete: () => void
 
 const Sales: React.FC = () => {
     const { transactions, deleteTransaction, addTransaction, processReturn, inventory, setCurrentPage } = useContext(ShopContext);
-    const { dateFilter, gstFilter, paymentFilter, bundleFilter, activeFilterCount } = useFilters();
+    const { dateFilter, gstFilter, paymentFilter, bundleFilter, returnFilter, activeFilterCount } = useFilters();
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isConfirmDeleteModalOpen, setIsConfirmDeleteModalOpen] = useState(false);
@@ -819,11 +828,13 @@ const Sales: React.FC = () => {
 
         // Payment filter
         if (paymentFilter !== 'all') {
-            results = results.filter(t => 
-                paymentFilter === 'credit'
-                    ? t.payment_method === 'On Credit'
-                    : t.payment_method === 'Online' || t.payment_method === 'Offline'
-            );
+            if (paymentFilter === 'online') {
+                results = results.filter(t => t.payment_method === 'Online');
+            } else if (paymentFilter === 'offline') {
+                results = results.filter(t => t.payment_method === 'Offline');
+            } else if (paymentFilter === 'credit') {
+                results = results.filter(t => t.payment_method === 'On Credit');
+            }
         }
 
         // Bundle filter
@@ -835,6 +846,11 @@ const Sales: React.FC = () => {
             );
         }
         
+        // Return filter
+        if (returnFilter === 'withReturns') {
+            results = results.filter(t => t.items.some(item => item.status === 'returned'));
+        }
+
         // Search term filter
         if (debouncedSearchTerm) {
             results = results.filter(t =>
@@ -845,7 +861,7 @@ const Sales: React.FC = () => {
         }
 
         return results;
-    }, [transactions, dateFilter, gstFilter, paymentFilter, bundleFilter, debouncedSearchTerm]);
+    }, [transactions, dateFilter, gstFilter, paymentFilter, bundleFilter, returnFilter, debouncedSearchTerm]);
 
     const handleOpenModal = (transaction: Transaction | null = null) => {
         setTransactionToEdit(transaction);

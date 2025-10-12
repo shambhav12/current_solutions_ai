@@ -316,7 +316,7 @@ const InventoryCard: React.FC<{ item: InventoryItem; onEdit: () => void; onDelet
                      {item.is_bundle && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary/10 text-primary">Bundle</span>}
                 </div>
                 <div className="text-right flex-shrink-0">
-                    <span className={`font-semibold text-lg px-2 py-0.5 rounded ${item.stock < 10 ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
+                    <span className="font-semibold text-lg px-2 py-0.5 rounded bg-surface-hover text-text-main">
                         {item.stock} in stock
                     </span>
                     {canBeBundled && (
@@ -531,7 +531,7 @@ const Inventory: React.FC = () => {
                                             {item.is_bundle && <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-primary/10 text-primary">Bundle</span>}
                                         </div>
                                     </td>
-                                    <td className={`px-4 py-4 whitespace-nowrap text-sm font-semibold ${item.stock < 10 ? 'text-danger' : 'text-text-main'}`}>
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm font-semibold text-text-main">
                                         <div>
                                             <span>{item.stock} units</span>
                                             {canBeBundled && (
