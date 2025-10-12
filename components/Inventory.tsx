@@ -1,9 +1,9 @@
 import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { ShopContext } from '../App';
-import { InventoryItem } from '../types';
+import { Page, InventoryItem } from '../types';
 import Modal from './ui/Modal';
 import ConfirmationModal from './ui/ConfirmationModal';
-import { PlusIcon, EditIcon, DeleteIcon } from './Icons';
+import { PlusIcon, EditIcon, DeleteIcon, BillAddIcon } from './Icons';
 import { useDebounce } from '../hooks/useDebounce';
 
 type NewInventoryItem = {
@@ -351,7 +351,7 @@ const InventoryCard: React.FC<{ item: InventoryItem; onEdit: () => void; onDelet
 
 
 const Inventory: React.FC = () => {
-    const { inventory, sales, deleteInventoryItem } = useContext(ShopContext);
+    const { inventory, sales, deleteInventoryItem, setCurrentPage } = useContext(ShopContext);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -430,7 +430,7 @@ const Inventory: React.FC = () => {
                         INVENTORY VALUE: <span className="text-success">₹{totalInventoryValue.toFixed(2)}</span>
                     </p>
                 </div>
-                <div className="flex items-center gap-4 w-full sm:w-auto">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
                     <div className="relative flex-grow sm:w-64" ref={searchRef}>
                         <input
                             type="text"
@@ -453,6 +453,10 @@ const Inventory: React.FC = () => {
                             </div>
                         )}
                     </div>
+                    <button onClick={() => setCurrentPage(Page.ScanPurchaseBill)} className="inline-flex items-center justify-center px-4 py-2 border border-primary text-sm font-medium rounded-md shadow-sm text-primary bg-primary/10 hover:bg-primary/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors flex-shrink-0">
+                        <BillAddIcon />
+                        <span className="ml-2 hidden sm:inline">Scan Bill</span>
+                    </button>
                     <button onClick={() => handleOpenModal()} className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background focus:ring-primary transition-colors flex-shrink-0">
                         <PlusIcon />
                         <span className="ml-2 hidden sm:inline">New Item</span>

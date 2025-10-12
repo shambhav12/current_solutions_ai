@@ -60,7 +60,7 @@ export const extractSaleDataFromImage = async (base64Image: string) => {
 
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: [{ parts: [imagePart, textPart] }],
+        contents: { parts: [imagePart, textPart] },
         config: {
             responseMimeType: 'application/json',
             responseSchema: schema,
@@ -70,6 +70,50 @@ export const extractSaleDataFromImage = async (base64Image: string) => {
     const responseText = response.text;
     return JSON.parse(responseText);
 }
+
+export const extractInventoryDataFromImage = async (base64Image: string) => {
+    const imagePart = {
+        inlineData: {
+            mimeType: 'image/jpeg',
+            data: base64Image,
+        },
+    };
+
+    const textPart = {
+        text: `You are an expert data entry clerk specializing in reading purchase invoices for an electrical shop. Analyze the provided image of a purchase bill. Extract all line items, including the product name, quantity, and the total price (cost) for each item. Do not invent items not on the bill. If a grand total is present, you can use it for verification but do not include it as a line item. Structure the output as a JSON object matching the provided schema.`,
+    };
+
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            items: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        productName: { type: Type.STRING, description: 'The name of the purchased product.' },
+                        quantity: { type: Type.NUMBER, description: 'The quantity of the product purchased. Default to 1 if not specified.' },
+                        totalCost: { type: Type.NUMBER, description: 'The total cost for this line item (price the shop paid).' },
+                    },
+                    required: ['productName', 'quantity', 'totalCost'],
+                },
+            },
+        },
+        required: ['items'],
+    };
+
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [imagePart, textPart] },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: schema,
+        }
+    });
+
+    const responseText = response.text;
+    return JSON.parse(responseText);
+};
 
 export const getSalesPredictions = async (salesData: Sale[]): Promise<{ predictions: SalesPrediction[] }> => {
     const prompt = `You are a senior business analyst for a small electric retail shop. Based on the following daily sales data in JSON format, provide a 7-day sales forecast.

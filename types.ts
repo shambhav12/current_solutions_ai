@@ -3,6 +3,7 @@ export enum Page {
     Dashboard = 'DASHBOARD',
     Sales = 'SALES',
     ScanBill = 'SCAN_BILL',
+    ScanPurchaseBill = 'SCAN_PURCHASE_BILL',
     Returns = 'RETURNS',
     Inventory = 'INVENTORY',
     Insights = 'INSIGHTS',

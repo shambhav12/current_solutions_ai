@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Page, Sale, InventoryItem, Transaction, CartItemForTransaction } from './types';
 import { useShopData } from './hooks/useShopData';
 import { useAuth } from './AuthContext';
-import { DashboardIcon, SalesIcon, InventoryIcon, InsightsIcon, MenuIcon, CloseIcon, ReturnIcon, CameraIcon } from './components/Icons';
+import { DashboardIcon, SalesIcon, InventoryIcon, InsightsIcon, MenuIcon, CloseIcon, ReturnIcon, CameraIcon, BillAddIcon } from './components/Icons';
 import Dashboard from './components/Dashboard';
 import Sales from './components/Sales';
 import Inventory from './components/Inventory';
@@ -13,6 +13,7 @@ import UserMenu from './components/UserMenu';
 import { FilterProvider } from './FilterContext';
 import Returns from './components/Returns';
 import ScanBill from './components/ScanBill';
+import ScanPurchaseBill from './components/ScanPurchaseBill';
 
 export const ShopContext = React.createContext<{
   sales: Sale[] | null;
@@ -20,26 +21,29 @@ export const ShopContext = React.createContext<{
   inventory: InventoryItem[] | null;
   // FIX: Updated addTransaction signature to accept an optional customerInfo object.
   addTransaction: (items: CartItemForTransaction[], paymentMethod: 'Online' | 'Offline' | 'On Credit', customerInfo?: { name?: string; phone?: string }) => Promise<void>;
-  updateSale: (updatedSale: Sale) => void;
-  deleteTransaction: (transactionId: string) => void;
+  // FIX: Aligned function return types with their async implementations in useShopData.
+  // Several functions are async and thus return a Promise, not void.
+  updateSale: (updatedSale: Sale) => Promise<void>;
+  deleteTransaction: (transactionId: string) => Promise<void>;
   processReturn: (saleId: string) => Promise<void>;
   processStandaloneReturn: (itemToReturn: InventoryItem, quantity: number, refundAmount: number) => Promise<void>;
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => Promise<InventoryItem | null>;
-  updateInventoryItem: (item: InventoryItem) => void;
-  deleteInventoryItem: (itemId: string) => void;
+  updateInventoryItem: (item: InventoryItem) => Promise<void>;
+  deleteInventoryItem: (itemId: string) => Promise<void>;
   setCurrentPage: (page: Page) => void;
 }>({
   sales: null,
   transactions: null,
   inventory: null,
   addTransaction: async () => {},
-  updateSale: () => {},
-  deleteTransaction: () => {},
+  // FIX: Updated default values to be async functions to match their new types.
+  updateSale: async () => {},
+  deleteTransaction: async () => {},
   processReturn: async () => {},
   processStandaloneReturn: async () => {},
   addInventoryItem: async () => null,
-  updateInventoryItem: () => {},
-  deleteInventoryItem: () => {},
+  updateInventoryItem: async () => {},
+  deleteInventoryItem: async () => {},
   setCurrentPage: () => {},
 });
 
@@ -104,6 +108,8 @@ const App: React.FC = () => {
         return <Sales />;
       case Page.ScanBill:
         return <ScanBill />;
+      case Page.ScanPurchaseBill:
+        return <ScanPurchaseBill />;
       case Page.Returns:
         return <Returns />;
       case Page.Inventory:
@@ -154,6 +160,7 @@ const App: React.FC = () => {
                   { page: Page.ScanBill, label: 'Scan Bill', icon: <CameraIcon /> },
                   { page: Page.Returns, label: 'Returns', icon: <ReturnIcon /> },
                   { page: Page.Inventory, label: 'Inventory', icon: <InventoryIcon /> },
+                  { page: Page.ScanPurchaseBill, label: 'Add Stock from Bill', icon: <BillAddIcon /> },
                   { page: Page.Insights, label: 'AI Insights', icon: <InsightsIcon /> },
                 ].map((item) => (
                   <button

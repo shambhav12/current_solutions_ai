@@ -33,28 +33,43 @@ const ScanBill: React.FC = () => {
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
 
-    const startCamera = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.play();
+    useEffect(() => {
+        const enableStream = async () => {
+            if (isCameraOn) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    streamRef.current = stream;
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        await videoRef.current.play();
+                    }
+                } catch (err) {
+                    setError("Could not access the camera. Please ensure you have given permission in your browser settings.");
+                    console.error("Camera access error:", err);
+                    setIsCameraOn(false);
+                }
             }
-            setIsCameraOn(true);
-            setError(null);
-        } catch (err) {
-            setError("Could not access the camera. Please ensure you have given permission in your browser settings.");
-            console.error("Camera access error:", err);
-        }
+        };
+
+        enableStream();
+
+        return () => {
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+                streamRef.current = null;
+            }
+        };
+    }, [isCameraOn]);
+
+
+    const startCamera = () => {
+        setIsCameraOn(true);
+        setError(null);
     };
 
     const stopCamera = () => {
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
-            stream.getTracks().forEach(track => track.stop());
-            videoRef.current.srcObject = null;
-        }
         setIsCameraOn(false);
     };
 
