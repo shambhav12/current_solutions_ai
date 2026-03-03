@@ -153,7 +153,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ onClose, itemToEdit, inve
         } else {
             // Handle adding multiple items
             try {
-                const existingNames = new Set(inventory.map(i => i.name.trim().toLowerCase()));
+                const existingNames = new Set<string>(inventory.map(i => i.name.trim().toLowerCase()));
                 const payloads = items.map(item => validateAndPreparePayload(item, existingNames));
                 await Promise.all(payloads.map(payload => addInventoryItem(payload)));
             } catch (error) {
@@ -356,7 +356,6 @@ const Inventory: React.FC = () => {
     const [itemToEdit, setItemToEdit] = useState<InventoryItem | null>(null);
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
     const [itemToDelete, setItemToDelete] = useState<InventoryItem | null>(null);
-    const [itemHasSales, setItemHasSales] = useState(false);
     
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -409,8 +408,6 @@ const Inventory: React.FC = () => {
     };
     
     const openDeleteConfirm = (item: InventoryItem) => {
-        const hasSales = sales.some(sale => sale.inventoryItemId === item.id);
-        setItemHasSales(hasSales);
         setItemToDelete(item);
         setIsConfirmModalOpen(true);
     };
@@ -474,15 +471,8 @@ const Inventory: React.FC = () => {
                 onConfirm={handleDelete}
                 title="Delete Inventory Item"
             >
-                {itemHasSales ? (
-                    <>
-                        <strong>Warning:</strong> This item has existing sales records. Deleting "{itemToDelete?.name}" will also permanently delete <strong>all associated sales records</strong>. This action cannot be undone. Are you sure you want to proceed?
-                    </>
-                ) : (
-                    <>
-                        Are you sure you want to delete "{itemToDelete?.name}"? This action cannot be undone.
-                    </>
-                )}
+                Are you sure you want to delete "{itemToDelete?.name}"? This action cannot be undone. 
+                Note: Items with existing sales records cannot be deleted.
             </ConfirmationModal>
             
             <div className="md:hidden space-y-4">

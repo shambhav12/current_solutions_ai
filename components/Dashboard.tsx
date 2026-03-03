@@ -57,9 +57,12 @@ const Dashboard: React.FC = () => {
     const filteredSales = useMemo(() => filterSalesByDate(sales, dateFilter), [sales, dateFilter]);
     
     // This is the single source of truth for all calculations.
-    // It correctly excludes items returned via the old method (status: 'returned')
-    // and correctly includes standalone returns (which are negative-value sales with status: 'completed').
-    const relevantSales = useMemo(() => filteredSales.filter(s => s.status !== 'returned'), [filteredSales]);
+    // It correctly includes completed sales and standalone returns (negative price),
+    // while correctly excluding items returned from a regular sale (positive price, 'returned' status).
+    const relevantSales = useMemo(() => 
+        filteredSales.filter(s => s.status === 'completed' || s.totalPrice < 0), 
+        [filteredSales]
+    );
     
     const totalRevenue = useMemo(() =>
         relevantSales.reduce((acc, sale) => acc + sale.totalPrice, 0),
@@ -68,7 +71,14 @@ const Dashboard: React.FC = () => {
 
     const totalProfit = useMemo(() =>
         relevantSales.reduce((acc, sale) => {
-            const saleProfit = sale.totalPrice - (sale.itemCostAtSale ?? 0);
+            // For a sale, profit is revenue - cost.
+            // For a standalone return, the impact is -revenue (refund) + cost (item returned to stock).
+            // This logic correctly handles both cases.
+            const costImpact = sale.totalPrice >= 0
+                ? (sale.itemCostAtSale ?? 0)   // For a sale, subtract cost.
+                : -(sale.itemCostAtSale ?? 0); // For a return, add cost back.
+            
+            const saleProfit = sale.totalPrice - costImpact;
             return acc + saleProfit;
         }, 0),
         [relevantSales]

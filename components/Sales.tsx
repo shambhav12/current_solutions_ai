@@ -70,7 +70,7 @@ const SalesForm: React.FC<{
             
             const stockRestorationMap = new Map<string, number>();
             editableItems.forEach(saleItem => {
-                const invItem = inventoryMap.get(saleItem.inventoryItemId);
+                const invItem = inventoryMap.get(saleItem.inventoryItemId) as InventoryItem | undefined;
                 if(invItem){
                     const unitsSold = saleItem.sale_type === 'bundle' 
                         ? saleItem.quantity * (invItem.items_per_bundle || 1) 
@@ -81,7 +81,7 @@ const SalesForm: React.FC<{
             });
 
             const cartItems: CartItem[] = editableItems.map(saleItem => {
-                const invItem = inventoryMap.get(saleItem.inventoryItemId);
+                const invItem = inventoryMap.get(saleItem.inventoryItemId) as InventoryItem | undefined;
                 if (!invItem) return null;
 
                 const pricePerUnit = saleItem.totalPrice / saleItem.quantity;

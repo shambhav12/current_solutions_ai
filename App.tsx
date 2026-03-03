@@ -100,26 +100,15 @@ const App: React.FC = () => {
     [sales, transactions, inventory, addTransaction, updateSale, deleteTransaction, processReturn, processStandaloneReturn, addInventoryItem, updateInventoryItem, deleteInventoryItem]
   );
 
-  const renderPage = useCallback(() => {
-    switch (currentPage) {
-      case Page.Dashboard:
-        return <Dashboard />;
-      case Page.Sales:
-        return <Sales />;
-      case Page.ScanBill:
-        return <ScanBill />;
-      case Page.ScanPurchaseBill:
-        return <ScanPurchaseBill />;
-      case Page.Returns:
-        return <Returns />;
-      case Page.Inventory:
-        return <Inventory />;
-      case Page.Insights:
-        return <Insights />;
-      default:
-        return <Dashboard />;
-    }
-  }, [currentPage]);
+  const pages = useMemo(() => ({
+    [Page.Dashboard]: <Dashboard />,
+    [Page.Sales]: <Sales />,
+    [Page.ScanBill]: <ScanBill />,
+    [Page.ScanPurchaseBill]: <ScanPurchaseBill />,
+    [Page.Returns]: <Returns />,
+    [Page.Inventory]: <Inventory />,
+    [Page.Insights]: <Insights />,
+  }), []);
 
   if (isAuthLoading || isDataLoading) {
     return (
@@ -203,7 +192,13 @@ const App: React.FC = () => {
             </header>
 
             <main className="flex-1 overflow-y-auto">
-              <div className="p-4 md:p-8">{renderPage()}</div>
+              <div className="p-4 md:p-8 h-full">
+                {Object.entries(pages).map(([pageKey, pageComponent]) => (
+                    <div key={pageKey} className={currentPage === pageKey ? 'block h-full' : 'hidden'}>
+                        {pageComponent}
+                    </div>
+                ))}
+              </div>
             </main>
           </div>
         </div>

@@ -99,7 +99,7 @@ const ScanPurchaseBill: React.FC = () => {
             const inventoryMap = new Map(inventory.map(i => [i.name.toLowerCase(), i]));
 
             const processedItems: ExtractedInventoryItem[] = result.items.map((item: any, index: number) => {
-                const matchedItem = inventoryMap.get(item.productName.toLowerCase()) || null;
+                const matchedItem = (inventoryMap.get(item.productName.toLowerCase()) as InventoryItem | undefined) || null;
                 const costPerUnit = (item.totalCost || 0) / (item.quantity || 1);
                 const suggestedPrice = costPerUnit * 1.2; // Suggest 20% markup
 

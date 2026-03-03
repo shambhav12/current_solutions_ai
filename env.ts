@@ -18,9 +18,8 @@ export const GOOGLE_CLIENT_ID = '1046189549493-bcht5m68nd62cbkgmi5b9jd08oqa6mmv.
 
 // IMPORTANT: Replace with your Supabase Project URL and Anon Key
 // from your Supabase project settings > API.
-export const SUPABASE_URL = 'https://egxujjbajpneyvzgxowf.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVneHVqamJhanBuZXl2emd4b3dmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MDMwNTAsImV4cCI6MjA3NDQ3OTA1MH0.oRRyDviTcqtp-HEjZfJbUBt17kXglXRCW1cEDzGrGVk';
-
+export const SUPABASE_URL = 'https://cknzcxdctnecextrftln.supabase.co';
+export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNrbnpjeGRjdG5lY2V4dHJmdGxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyOTIzODUsImV4cCI6MjA4Nzg2ODM4NX0.e1ZGEJVI8563ET9CIVMYexkyAU1dgEOtjW_-cRJfipU';
 
 // IMPORTANT: Replace with your Gemini API Key from Google AI Studio.
 // The AI features (Insights, Bill Scanning) will not work without this.
