@@ -23,3 +23,4 @@ export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // IMPORTANT: Replace with your Gemini API Key from Google AI Studio.
 // The AI features (Insights, Bill Scanning) will not work without this.
 export const GEMINI_API_KEY = 'AIzaSyAZ7NYYVOdaqrnoytXb1wl20OQt2E0lUj4';
+
