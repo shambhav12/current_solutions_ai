@@ -19,9 +19,10 @@ export const generateInvoicePDF = async (
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
   const margin = 14;
-  const RUPEE = "\u20B9";
+  const CURRENCY = "Rs.";
 
   // ---------------- HEADER ----------------
+
 
   doc.setFillColor(31, 41, 55);
   doc.rect(0, 0, pageWidth, 16, "F");
@@ -122,8 +123,8 @@ export const generateInvoicePDF = async (
     "#",
     "Item Description",
     "Qty",
-    `Rate (${RUPEE})`,
-    `Amount (${RUPEE})`,
+    `Rate (${CURRENCY})`,
+    `Amount (${CURRENCY})`,
   ];
 
   const tableRows: (string | number)[][] = [];
@@ -148,8 +149,8 @@ export const generateInvoicePDF = async (
       index + 1,
       `${item.productName}${item.sale_type === "bundle" ? " (Bundle)" : ""}`,
       item.quantity,
-      rate.toFixed(2),
-      taxableAmount.toFixed(2),
+      rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     ]);
 
     subtotal += taxableAmount;
@@ -193,16 +194,15 @@ export const generateInvoicePDF = async (
   const finalY = (doc as any).lastAutoTable.finalY || 120;
 
   // ---------------- SUMMARY BOX ----------------
-
-  const summaryWidth = 80;
+  const summaryWidth = 90;
   const summaryX = pageWidth - margin - summaryWidth;
-
   let summaryY = finalY + 12;
 
   const grandTotal = items.reduce((acc, i) => acc + i.totalPrice, 0);
+  const boxHeight = totalGst > 0 ? 50 : 35;
 
   doc.setFillColor(245, 245, 245);
-  doc.rect(summaryX - 5, summaryY - 6, summaryWidth + 5, 40, "F");
+  doc.rect(summaryX - 5, summaryY - 6, summaryWidth + 5, boxHeight, "F");
 
   doc.setFontSize(10);
   doc.setTextColor(80);
@@ -210,7 +210,7 @@ export const generateInvoicePDF = async (
 
   doc.text("Subtotal", summaryX, summaryY);
   doc.text(
-    `${RUPEE} ${subtotal.toFixed(2)}`,
+    `${CURRENCY} ${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     pageWidth - margin,
     summaryY,
     { align: "right" }
@@ -220,42 +220,38 @@ export const generateInvoicePDF = async (
     const cgst = totalGst / 2;
     const sgst = totalGst / 2;
 
-    summaryY += 7;
-
+    summaryY += 8;
     doc.text("CGST (9%)", summaryX, summaryY);
     doc.text(
-      `${RUPEE} ${cgst.toFixed(2)}`,
+      `${CURRENCY} ${cgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       pageWidth - margin,
       summaryY,
       { align: "right" }
     );
 
-    summaryY += 7;
-
+    summaryY += 8;
     doc.text("SGST (9%)", summaryX, summaryY);
     doc.text(
-      `${RUPEE} ${sgst.toFixed(2)}`,
+      `${CURRENCY} ${sgst.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       pageWidth - margin,
       summaryY,
       { align: "right" }
     );
   }
 
-  summaryY += 10;
-
+  summaryY += 12;
   doc.setDrawColor(200);
-  doc.line(summaryX, summaryY - 4, pageWidth - margin, summaryY - 4);
+  doc.line(summaryX, summaryY - 5, pageWidth - margin, summaryY - 5);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(31, 41, 55);
 
-  doc.text("GRAND TOTAL", summaryX, summaryY);
-
+  doc.text("GRAND TOTAL", summaryX, summaryY + 2);
   doc.text(
-    `${RUPEE} ${grandTotal.toFixed(2)}`,
+    `${CURRENCY} ${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     pageWidth - margin,
-    summaryY,
+    summaryY + 2,
     { align: "right" }
   );
 
