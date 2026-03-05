@@ -19,7 +19,7 @@ export const generateInvoicePDF = async (
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
   const margin = 14;
-  const CURRENCY = "₹";
+  const CURRENCY = "Rs.";
 
   // ---------------- HEADER ----------------
 
