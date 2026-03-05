@@ -6,7 +6,7 @@ export interface CustomerInfo {
     name?: string;
     phone?: string;
 }
-
+const RUPEE = "\u20B9";
 export const generateInvoicePDF = async (transaction: Transaction, inventoryMap: Map<string, InventoryItem>, user: User | null, customerInfo?: CustomerInfo) => {
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.width;
@@ -87,7 +87,7 @@ export const generateInvoicePDF = async (transaction: Transaction, inventoryMap:
     }
     
     // --- Table Section ---
-    const tableColumn = ["#", "Item Description", "Qty", "Rate ₹", "Amount ₹"];
+    const tableColumn = ["#", "Item Description", "Qty", "Rate (${RUPEE})", "Amount (${RUPEE})"];
     const tableRows: (string | number)[][] = [];
     
     let subtotal = 0;
@@ -158,17 +158,17 @@ export const generateInvoicePDF = async (transaction: Transaction, inventoryMap:
     doc.setFont('helvetica', 'normal');
     
     doc.text(`Subtotal:`, summaryX, summaryY + 2);
-    doc.text(`₹${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 2, { align: 'right' });
+    doc.text(`(${RUPEE})${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 2, { align: 'right' });
     
     if (totalGst > 0) {
         const cgst = totalGst / 2;
         const sgst = totalGst / 2;
         summaryY += 7;
         doc.text(`CGST (9%):`, summaryX, summaryY + 2);
-        doc.text(`₹${cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 2, { align: 'right' });
+        doc.text(`(${RUPEE})${cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 2, { align: 'right' });
         summaryY += 7;
         doc.text(`SGST (9%):`, summaryX, summaryY + 2);
-        doc.text(`₹${sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 2, { align: 'right' });
+        doc.text(`(${RUPEE})${sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 2, { align: 'right' });
     }
     
     summaryY += 10;
@@ -180,7 +180,7 @@ export const generateInvoicePDF = async (transaction: Transaction, inventoryMap:
     doc.setFont('helvetica', 'bold');
     doc.text(`GRAND TOTAL:`, summaryX, summaryY + 3);
     const grandTotal = itemsToInvoice.reduce((acc, i) => acc + i.totalPrice, 0);
-    doc.text(`₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 3, { align: 'right' });
+    doc.text(`(${RUPEE})${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 3, { align: 'right' });
     
     // --- Signature & Footer ---
     let footerY = pageHeight - 25;
