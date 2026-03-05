@@ -194,7 +194,7 @@ export const generateInvoicePDF = async (
   const finalY = (doc as any).lastAutoTable.finalY || 120;
 
   // ---------------- SUMMARY BOX ----------------
-  const summaryWidth = 100;
+  const summaryWidth = 90;
   const summaryX = pageWidth - margin - summaryWidth;
   let summaryY = finalY + 12;
 
@@ -202,7 +202,7 @@ export const generateInvoicePDF = async (
   const boxHeight = totalGst > 0 ? 50 : 35;
 
   doc.setFillColor(245, 245, 245);
-  doc.rect(summaryX - 5, summaryY - 6, summaryWidth + 5, boxHeight, "F");
+  doc.rect(summaryX - 2, summaryY - 6, summaryWidth + 5, boxHeight, "F");
 
   doc.setFontSize(10);
   doc.setTextColor(80);
