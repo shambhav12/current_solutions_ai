@@ -9,70 +9,106 @@ export interface CustomerInfo {
 
 export const generateInvoicePDF = async (transaction: Transaction, inventoryMap: Map<string, InventoryItem>, user: User | null, customerInfo?: CustomerInfo) => {
     const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+    const margin = 14;
     
-    // Shop Details
-    doc.setFontSize(20);
-    doc.text(user?.shop_name || 'Electricals', 14, 22);
+    // --- Header Branding ---
+    // Add a subtle top accent bar
+    doc.setFillColor(31, 41, 55); // Dark Slate
+    doc.rect(0, 0, pageWidth, 15, 'F');
+    
+    // Shop Name (Stylized)
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(user?.shop_name?.toUpperCase() || 'ELECTRICALS', margin, 10);
+    
+    // Reset Text Color
+    doc.setTextColor(31, 41, 55);
+    
+    // --- Invoice Title & Meta ---
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.text('INVOICE', margin, 35);
+    
     doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Invoice Number: #${transaction.id.substring(0, 8).toUpperCase()}`, margin, 42);
+    doc.text(`Date of Issue: ${new Date(transaction.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}`, margin, 47);
+    
+    // --- From & To Section ---
+    const sectionY = 60;
+    
+    // From (Shop Details)
+    doc.setTextColor(31, 41, 55);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('FROM:', margin, sectionY);
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(user?.shop_name || 'Electricals', margin, sectionY + 7);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    let fromOffset = sectionY + 12;
     if(user?.email) {
-        doc.text(`Email: ${user.email}`, 14, 28);
+        doc.text(user.email, margin, fromOffset);
+        fromOffset += 5;
     }
     if(user?.phone) {
-        doc.text(`Phone: ${user.phone}`, 14, 33);
+        doc.text(`Ph: ${user.phone}`, margin, fromOffset);
     }
     
-    // Invoice Details
-    doc.setFontSize(12);
-    doc.text('Tax Invoice', 150, 22);
-    doc.setFontSize(10);
-    doc.text(`Invoice #: ${transaction.id.substring(0, 8)}`, 150, 28);
-    doc.text(`Date: ${new Date(transaction.date).toLocaleDateString()}`, 150, 33);
-
-    // Customer Details (Optional)
-    if (customerInfo?.name || customerInfo?.phone) {
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Bill To:', 14, 42);
-        doc.setFont('helvetica', 'normal');
+    // To (Customer Details)
+    const col2X = pageWidth / 2 + 10;
+    doc.setTextColor(31, 41, 55);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('BILL TO:', col2X, sectionY);
+    
+    if (customerInfo?.name || customerInfo?.phone || transaction.customer_name) {
         doc.setFontSize(10);
-        let currentY = 47;
-        if (customerInfo.name) {
-            doc.text(`Name: ${customerInfo.name}`, 14, currentY);
-            currentY += 5;
+        doc.setFont('helvetica', 'bold');
+        doc.text(customerInfo?.name || transaction.customer_name || 'Valued Customer', col2X, sectionY + 7);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(80, 80, 80);
+        if (customerInfo?.phone || transaction.customer_phone) {
+            doc.text(`Ph: ${customerInfo?.phone || transaction.customer_phone}`, col2X, sectionY + 12);
         }
-        if (customerInfo.phone) {
-            doc.text(`Phone: ${customerInfo.phone}`, 14, currentY);
-        }
+    } else {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(150, 150, 150);
+        doc.text('Cash Sale / Walk-in Customer', col2X, sectionY + 7);
     }
     
-    // Table Data
-    const tableColumn = ["#", "Item Description", "Qty", "Rate", "Amount"];
+    // --- Table Section ---
+    const tableColumn = ["#", "Item Description", "Qty", "Rate (₹)", "Amount (₹)"];
     const tableRows: (string | number)[][] = [];
     
     let subtotal = 0;
     let totalGst = 0;
-
     const itemsToInvoice = transaction.items.filter(item => item.status !== 'returned');
 
     itemsToInvoice.forEach((item, index) => {
         const unitPrice = item.totalPrice / item.quantity;
-
         let rate = unitPrice;
         if (item.has_gst) {
-            // Price is inclusive of 18% GST, so calculate pre-tax rate
             rate = unitPrice / 1.18; 
         }
-        
         const taxableAmount = rate * item.quantity;
         
-        const rowData = [
+        tableRows.push([
             index + 1,
             `${item.productName}${item.sale_type === 'bundle' ? ` (Bundle)` : ''}`,
             item.quantity,
-            rate.toFixed(2),
-            taxableAmount.toFixed(2)
-        ];
-        tableRows.push(rowData);
+            rate.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            taxableAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        ]);
 
         subtotal += taxableAmount;
         if (item.has_gst) {
@@ -80,43 +116,75 @@ export const generateInvoicePDF = async (transaction: Transaction, inventoryMap:
         }
     });
 
-    // Create Table
     autoTable(doc, {
-        startY: (customerInfo?.name || customerInfo?.phone) ? 60 : 45,
+        startY: 90,
         head: [tableColumn],
         body: tableRows,
-        theme: 'striped',
-        headStyles: { fillColor: [31, 41, 55] }
+        theme: 'grid',
+        headStyles: { 
+            fillColor: [31, 41, 55], 
+            textColor: [255, 255, 255],
+            fontStyle: 'bold',
+            halign: 'center'
+        },
+        columnStyles: {
+            0: { halign: 'center', cellWidth: 10 },
+            2: { halign: 'center', cellWidth: 20 },
+            3: { halign: 'right', cellWidth: 35 },
+            4: { halign: 'right', cellWidth: 35 }
+        },
+        styles: {
+            fontSize: 9,
+            cellPadding: 4
+        },
+        alternateRowStyles: {
+            fillColor: [250, 250, 250]
+        }
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY || 80;
+    const finalY = (doc as any).lastAutoTable.finalY || 120;
 
-    // Summary
+    // --- Summary Section ---
+    const summaryWidth = 80;
+    const summaryX = pageWidth - margin - summaryWidth;
     let summaryY = finalY + 10;
-    const summaryX = 145;
+
+    // Background for summary
+    doc.setFillColor(245, 245, 245);
+    doc.rect(summaryX - 5, summaryY - 5, summaryWidth + 5, 35 + (totalGst > 0 ? 15 : 0), 'F');
+
     doc.setFontSize(10);
-    doc.text(`Subtotal:`, summaryX, summaryY);
-    doc.text(`${subtotal.toFixed(2)}`, 200, summaryY, { align: 'right' });
+    doc.setTextColor(80, 80, 80);
+    doc.setFont('helvetica', 'normal');
+    
+    doc.text(`Subtotal:`, summaryX, summaryY + 2);
+    doc.text(`₹${subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 2, { align: 'right' });
     
     if (totalGst > 0) {
         const cgst = totalGst / 2;
         const sgst = totalGst / 2;
-        summaryY += 5;
-        doc.text(`CGST (9%):`, summaryX, summaryY);
-        doc.text(`${cgst.toFixed(2)}`, 200, summaryY, { align: 'right' });
-        summaryY += 5;
-        doc.text(`SGST (9%):`, summaryX, summaryY);
-        doc.text(`${sgst.toFixed(2)}`, 200, summaryY, { align: 'right' });
+        summaryY += 7;
+        doc.text(`CGST (9%):`, summaryX, summaryY + 2);
+        doc.text(`₹${cgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 2, { align: 'right' });
+        summaryY += 7;
+        doc.text(`SGST (9%):`, summaryX, summaryY + 2);
+        doc.text(`₹${sgst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 2, { align: 'right' });
     }
     
-    summaryY += 7;
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Grand Total:`, summaryX, summaryY);
-    doc.text(`${itemsToInvoice.reduce((acc, i) => acc + i.totalPrice, 0).toFixed(2)}`, 200, summaryY, { align: 'right' });
+    summaryY += 10;
+    doc.setDrawColor(200, 200, 200);
+    doc.line(summaryX, summaryY - 3, pageWidth - margin, summaryY - 3);
     
-    // Signature
-    let footerY = doc.internal.pageSize.height - 15;
+    doc.setFontSize(12);
+    doc.setTextColor(31, 41, 55);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`GRAND TOTAL:`, summaryX, summaryY + 3);
+    const grandTotal = itemsToInvoice.reduce((acc, i) => acc + i.totalPrice, 0);
+    doc.text(`₹${grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`, pageWidth - margin, summaryY + 3, { align: 'right' });
+    
+    // --- Signature & Footer ---
+    let footerY = pageHeight - 25;
+    
     if (user && user.signature_url) {
         try {
             const response = await fetch(user.signature_url);
@@ -128,28 +196,35 @@ export const generateInvoicePDF = async (transaction: Transaction, inventoryMap:
                 reader.readAsDataURL(blob);
             });
             
-            // Add signature image and adjust footer position
-            doc.addImage(dataUrl, 'PNG', 145, finalY + 25, 35, 15);
-            doc.line(145, finalY + 42, 195, finalY + 42); // Line for signature
-            doc.text('Authorized Signature', 150, finalY + 47);
-            footerY = finalY + 60; // Push footer down
+            const sigX = pageWidth - margin - 40;
+            const sigY = summaryY + 20;
+            doc.addImage(dataUrl, 'PNG', sigX, sigY, 35, 12);
+            doc.setDrawColor(150, 150, 150);
+            doc.line(sigX, sigY + 14, sigX + 40, sigY + 14);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'italic');
+            doc.text('Authorized Signature', sigX + 20, sigY + 19, { align: 'center' });
         } catch (e) {
             console.error("Could not add signature image to PDF", e);
         }
     }
 
-    // Footer
+    // Bottom Footer
+    doc.setDrawColor(230, 230, 230);
+    doc.line(margin, pageHeight - 20, pageWidth - margin, pageHeight - 20);
+    
     doc.setFontSize(8);
-    doc.text('Thank you for your visit!', 14, footerY);
-    doc.text('This is a computer-generated invoice.', 14, footerY + 4);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(150, 150, 150);
+    doc.text('Thank you for your business!', pageWidth / 2, pageHeight - 12, { align: 'center' });
+    doc.text('This is a computer-generated document and does not require a physical signature.', pageWidth / 2, pageHeight - 8, { align: 'center' });
 
     // Save PDF
     const pdfBlob = doc.output('blob');
     const blobUrl = URL.createObjectURL(pdfBlob);
-
     const link = document.createElement('a');
     link.href = blobUrl;
-    link.download = `Invoice-${transaction.id.substring(0,8)}.pdf`;
+    link.download = `Invoice-${transaction.id.substring(0,8).toUpperCase()}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
