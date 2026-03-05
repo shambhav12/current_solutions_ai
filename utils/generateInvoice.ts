@@ -194,7 +194,7 @@ export const generateInvoicePDF = async (
   const finalY = (doc as any).lastAutoTable.finalY || 120;
 
   // ---------------- SUMMARY BOX ----------------
-  const summaryWidth = 90;
+  const summaryWidth = 100;
   const summaryX = pageWidth - margin - summaryWidth;
   let summaryY = finalY + 12;
 
