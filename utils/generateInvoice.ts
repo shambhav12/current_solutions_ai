@@ -87,7 +87,7 @@ export const generateInvoicePDF = async (transaction: Transaction, inventoryMap:
     }
     
     // --- Table Section ---
-    const tableColumn = ["#", "Item Description", "Qty", "Rate (₹)", "Amount (₹)"];
+    const tableColumn = ["#", "Item Description", "Qty", "Rate ₹", "Amount ₹"];
     const tableRows: (string | number)[][] = [];
     
     let subtotal = 0;
