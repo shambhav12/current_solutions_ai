@@ -760,6 +760,9 @@ const Sales: React.FC = () => {
     const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
     const [saleToReturn, setSaleToReturn] = useState<Sale | null>(null);
     const [transactionToSettle, setTransactionToSettle] = useState<Transaction | null>(null);
+    const [transactionToDownload, setTransactionToDownload] = useState<Transaction | null>(null);
+    const [downloadCustomerName, setDownloadCustomerName] = useState('');
+    const [downloadCustomerPhone, setDownloadCustomerPhone] = useState('');
     
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -925,6 +928,24 @@ const Sales: React.FC = () => {
         }
     };
 
+    const handleConfirmDownload = () => {
+        if (transactionToDownload) {
+            generateInvoicePDF(transactionToDownload, inventoryMap, user, {
+                name: downloadCustomerName,
+                phone: downloadCustomerPhone
+            });
+            setTransactionToDownload(null);
+            setDownloadCustomerName('');
+            setDownloadCustomerPhone('');
+        }
+    };
+
+    const handleOpenDownloadModal = (transaction: Transaction) => {
+        setTransactionToDownload(transaction);
+        setDownloadCustomerName(transaction.customer_name || '');
+        setDownloadCustomerPhone(transaction.customer_phone || '');
+    };
+
     const paymentMethodBadges: Record<Transaction['payment_method'], React.ReactNode> = {
         'Online': <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-500/10 text-blue-400">Online</span>,
         'Offline': <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-500/10 text-gray-400">Offline</span>,
@@ -1014,6 +1035,44 @@ const Sales: React.FC = () => {
                 Are you sure you want to return "{saleToReturn?.productName}" (Qty: {saleToReturn?.quantity})? This will add the item(s) back to your inventory.
             </ConfirmationModal>
 
+            <Modal title="Customer Details (Optional)" isOpen={!!transactionToDownload} onClose={() => setTransactionToDownload(null)}>
+                <div className="space-y-4">
+                    <p className="text-sm text-text-muted">
+                        Enter customer details to include in the bill. You can leave these blank.
+                    </p>
+                    <div className="space-y-3">
+                        <div>
+                            <label className="block text-sm font-medium text-text-muted">Customer Name</label>
+                            <input 
+                                type="text" 
+                                value={downloadCustomerName} 
+                                onChange={e => setDownloadCustomerName(e.target.value)} 
+                                placeholder="Optional"
+                                className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-text-muted">Phone Number</label>
+                            <input 
+                                type="text" 
+                                value={downloadCustomerPhone} 
+                                onChange={e => setDownloadCustomerPhone(e.target.value)} 
+                                placeholder="Optional"
+                                className="mt-1 block w-full bg-background border border-border rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex justify-end pt-4">
+                        <button 
+                            onClick={handleConfirmDownload} 
+                            className="inline-flex justify-center items-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors"
+                        >
+                            Download Bill
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
             <div className="md:hidden space-y-4 pb-20">
                 {filteredTransactions.length > 0 ? (
                     filteredTransactions.map(t => 
@@ -1024,7 +1083,7 @@ const Sales: React.FC = () => {
                             onEdit={() => handleOpenModal(t)}
                             onReturn={setSaleToReturn}
                             onSettle={() => setTransactionToSettle(t)}
-                            onDownload={() => generateInvoicePDF(t, inventoryMap, user)}
+                            onDownload={() => handleOpenDownloadModal(t)}
                             inventoryMap={inventoryMap}
                         />
                     )
@@ -1099,7 +1158,7 @@ const Sales: React.FC = () => {
                                     <td className="px-4 py-4 whitespace-nowrap text-sm text-text-muted align-top">{new Date(t.date).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                                     <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium align-top">
                                         <div className="flex justify-end space-x-2">
-                                            <button onClick={() => generateInvoicePDF(t, inventoryMap, user)} className="text-info hover:opacity-80 p-1 rounded-full hover:bg-surface-hover transition-colors">
+                                            <button onClick={() => handleOpenDownloadModal(t)} className="text-info hover:opacity-80 p-1 rounded-full hover:bg-surface-hover transition-colors">
                                                 <InvoiceIcon />
                                             </button>
                                             {t.payment_method === 'On Credit' ? (

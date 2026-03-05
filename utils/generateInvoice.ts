@@ -2,7 +2,12 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Transaction, InventoryItem, User } from '../types';
 
-export const generateInvoicePDF = async (transaction: Transaction, inventoryMap: Map<string, InventoryItem>, user: User | null) => {
+export interface CustomerInfo {
+    name?: string;
+    phone?: string;
+}
+
+export const generateInvoicePDF = async (transaction: Transaction, inventoryMap: Map<string, InventoryItem>, user: User | null, customerInfo?: CustomerInfo) => {
     const doc = new jsPDF();
     
     // Shop Details
@@ -22,6 +27,23 @@ export const generateInvoicePDF = async (transaction: Transaction, inventoryMap:
     doc.setFontSize(10);
     doc.text(`Invoice #: ${transaction.id.substring(0, 8)}`, 150, 28);
     doc.text(`Date: ${new Date(transaction.date).toLocaleDateString()}`, 150, 33);
+
+    // Customer Details (Optional)
+    if (customerInfo?.name || customerInfo?.phone) {
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Bill To:', 14, 42);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        let currentY = 47;
+        if (customerInfo.name) {
+            doc.text(`Name: ${customerInfo.name}`, 14, currentY);
+            currentY += 5;
+        }
+        if (customerInfo.phone) {
+            doc.text(`Phone: ${customerInfo.phone}`, 14, currentY);
+        }
+    }
     
     // Table Data
     const tableColumn = ["#", "Item Description", "Qty", "Rate", "Amount"];
@@ -60,7 +82,7 @@ export const generateInvoicePDF = async (transaction: Transaction, inventoryMap:
 
     // Create Table
     autoTable(doc, {
-        startY: 45,
+        startY: (customerInfo?.name || customerInfo?.phone) ? 60 : 45,
         head: [tableColumn],
         body: tableRows,
         theme: 'striped',
